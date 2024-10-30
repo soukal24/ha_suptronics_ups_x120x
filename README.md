@@ -122,6 +122,8 @@ For extended functionality, such as controlling the charging process or detectin
 - Safely shut down the system when power loss is detected to prevent damage.
 
 ## Support
+
+If you're interested in this project, please note that I am not an experienced programmer. Most of this integration was created out of desperation and with the help of AI. I would be very grateful if someone could take over this project and help improve it further.
 If you encounter any issues, please feel free to open an issue on this repository. Contributions are welcome!
 
 ## License
