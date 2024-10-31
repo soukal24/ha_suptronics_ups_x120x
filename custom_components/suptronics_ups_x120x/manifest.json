@@ -2,7 +2,7 @@
     "domain": "suptronics_ups_x120x",
     "name": "Suptronics UPS X120x",
     "version": "1.0.1",
-    "documentation": "https://www.example.com/suptronics_ups_x120x",
+    "documentation": "https://github.com/soukal24/ha_suptronics_ups_x120x",
     "requirements": ["smbus2"],
     "dependencies": [],
     "codeowners": ["@soukal24"],
