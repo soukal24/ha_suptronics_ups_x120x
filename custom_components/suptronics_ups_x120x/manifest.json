@@ -1,9 +1,10 @@
 {
     "domain": "suptronics_ups_x120x",
-    "name": "Suptronics UPS X120x",
-    "version": "1.0.1",
+    "name": "Suptronics X120x",
+    "version": "2.0.0",
     "documentation": "https://github.com/soukal24/ha_suptronics_ups_x120x",
-    "requirements": ["smbus2"],
+    "config_flow": true,
+    "requirements": ["smbus2","gpiod>=2.2.1"],
     "dependencies": [],
     "codeowners": ["@soukal24"],
     "iot_class": "local_polling"
