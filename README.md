@@ -10,7 +10,7 @@ This repository contains the Home Assistant integration for the Suptronics UPS X
 
 ## Features
 - Monitor UPS battery level as a percentage.
-- Monitor UPS battery voltage in volts.
+- Monitor UPS battery voltage in volts. 
 - Automatically updates sensor readings.
 
 ## Installation
