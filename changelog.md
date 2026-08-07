@@ -5,6 +5,49 @@ Use it as both the changelog and the release notes for GitHub.
 
 ---
 
+## [2.1.0] - 2026-08-07
+
+No new features, no breaking changes — this release focuses on robustness,
+better Home Assistant integration and a nicer UI. Existing entities keep
+their IDs and history.
+
+### Added
+- **Long-term statistics**: battery level and voltage sensors now report
+  `state_class: measurement`, so Home Assistant records long-term statistics.
+- **Device grouping**: all entities are now grouped under a single
+  "Suptronics X120x" device in the UI.
+- **Hardware check during setup**: the config flow now verifies the UPS is
+  reachable over I2C and shows a clear error message instead of failing with
+  a cryptic error.
+- **Translations**: config/options dialogs now have proper texts in English
+  and Czech (`strings.json`, `translations/`).
+- **`hacs.json`** for smoother HACS custom-repository installs.
+- **Troubleshooting section** in the README (including the `/config/deps`
+  fix for the "500 Internal Server Error" issue).
+
+### Changed
+- **No more blocking I/O in the event loop**: all I2C reads and GPIO
+  operations now run in the executor, preventing "Detected blocking call"
+  warnings and UI freezes when the hardware is slow.
+- **Options apply immediately**: changing device class or invert logic in
+  the options dialog reloads the integration automatically — no restart
+  needed anymore.
+- **Graceful startup**: if the hardware is not reachable at startup, the
+  integration reports "not ready" and Home Assistant retries automatically.
+- **Raspberry Pi 5 GPIO chip auto-detection**: the GPIO chip is found by its
+  label (`pinctrl-rp1`), so the integration works on both older Pi 5 kernels
+  (`gpiochip4`) and newer ones (`gpiochip0`).
+- Sensors now report as **unavailable** (instead of unknown) when I2C reads
+  fail, and errors are logged only once per outage instead of repeatedly.
+
+### Fixed
+- Inconsistent default for invert logic between initial setup and later
+  reads (now consistently `true`).
+- The I2C bus and GPIO chip are properly closed when the integration is
+  unloaded.
+
+---
+
 ## [2.0.0] - 2025-04-15
 
 ### Highlights

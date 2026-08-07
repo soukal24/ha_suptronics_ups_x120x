@@ -8,17 +8,14 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import STATE_ON
 
-from . import DOMAIN
+from .const import DOMAIN, PIN_CHARGING, shared_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-# Physical pin for controlling charging
-PIN_CHARGING = 16
-INVERT_LOGIC = True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     """
-    Setup for the switch platform. 
+    Setup for the switch platform.
     Creates the UPS charging ON/OFF switch entity.
     """
     _LOGGER.debug("switch => async_setup_entry")
@@ -27,6 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     ent = UpsChargingSwitch(hub)
     async_add_entities([ent])
+
 
 class UpsChargingSwitch(SwitchEntity, RestoreEntity):
     """
@@ -41,10 +39,11 @@ class UpsChargingSwitch(SwitchEntity, RestoreEntity):
         self._hub = hub
         self._line = None
         self._attr_is_on = False
+        self._attr_device_info = shared_device_info()
 
     async def async_added_to_hass(self) -> None:
         """
-        Called when the entity is added. We attempt to restore the last known state 
+        Called when the entity is added. We attempt to restore the last known state
         (if any), then initialize the GPIO line with that state.
         """
         await super().async_added_to_hass()
@@ -55,11 +54,13 @@ class UpsChargingSwitch(SwitchEntity, RestoreEntity):
         else:
             self._attr_is_on = False
 
-        # Request the GPIO line from the hub
-        self._line = self._hub.add_switch(
-            port=PIN_CHARGING,
-            active_low=True,  
-            init_state=self._attr_is_on
+        # Requesting the GPIO line does blocking ioctls, so run it in the executor
+        self._line = await self.hass.async_add_executor_job(
+            lambda: self._hub.add_switch(
+                port=PIN_CHARGING,
+                active_low=True,
+                init_state=self._attr_is_on
+            )
         )
         _LOGGER.debug("Switch line request done for port=%d => is_on=%s", PIN_CHARGING, self._attr_is_on)
 
@@ -70,7 +71,7 @@ class UpsChargingSwitch(SwitchEntity, RestoreEntity):
         await super().async_will_remove_from_hass()
         if self._line:
             _LOGGER.debug("Releasing line for port=%d", PIN_CHARGING)
-            self._line.release()
+            await self.hass.async_add_executor_job(self._line.release)
             self._line = None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -79,7 +80,7 @@ class UpsChargingSwitch(SwitchEntity, RestoreEntity):
         """
         if not self._line:
             return
-        self._hub.turn_on(self._line, PIN_CHARGING)
+        await self.hass.async_add_executor_job(self._hub.turn_on, self._line, PIN_CHARGING)
         self._attr_is_on = True
         self.async_write_ha_state()
 
@@ -89,6 +90,6 @@ class UpsChargingSwitch(SwitchEntity, RestoreEntity):
         """
         if not self._line:
             return
-        self._hub.turn_off(self._line, PIN_CHARGING)
+        await self.hass.async_add_executor_job(self._hub.turn_off, self._line, PIN_CHARGING)
         self._attr_is_on = False
         self.async_write_ha_state()

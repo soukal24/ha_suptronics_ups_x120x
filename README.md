@@ -86,6 +86,26 @@ Find **Suptronics X120x**, click **“Configure”**, and modify options as need
 - Copy the new version of the integration into `custom_components`.
 - Restart Home Assistant and add the integration from the UI if needed. The system should pick up your existing configuration (if properly migrated).
 
+### Troubleshooting
+
+#### "500 Internal Server Error" when adding the integration
+If adding the integration fails immediately with a *500 Internal Server Error* and the log shows
+`TypeError: 'NoneType' object is not subscriptable` in `importlib_metadata`, the problem is **not**
+in this integration. Home Assistant Core crashes while checking the integration's Python
+requirements because of corrupted package leftovers in the `/config/deps` folder (this typically
+happens after a Core update that changes the Python version).
+
+**Fix:**
+1. Open the Terminal/SSH add-on.
+2. Run: `rm -rf /config/deps`
+3. Restart Home Assistant.
+4. Add the integration again — Home Assistant will re-download the requirements cleanly.
+
+#### "Could not reach the UPS" during setup
+- Make sure the I2C interface is enabled (see the installation steps above).
+- Check the board is properly seated on the GPIO header.
+- Optionally verify the device is visible at address `0x36` with `i2cdetect -y 1`.
+
 ### Debugging
 If you have issues, enable debug logging. Add the following to `configuration.yaml`:
 ```yaml

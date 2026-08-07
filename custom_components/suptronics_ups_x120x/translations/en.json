@@ -1,0 +1,27 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Suptronics X120x",
+                "description": "Set up the Suptronics X120x UPS. Make sure the I2C interface is enabled and the UPS board is connected, then confirm."
+            }
+        },
+        "error": {
+            "cannot_connect": "Could not reach the UPS on I2C bus 1 (address 0x36). Check that I2C is enabled and the board is properly connected."
+        },
+        "abort": {
+            "already_configured": "This integration is already configured. Only one instance is supported."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Suptronics X120x options",
+                "data": {
+                    "Power sensor device class": "Power sensor device class",
+                    "Power sensor invert logic": "Invert power sensor logic"
+                }
+            }
+        }
+    }
+}

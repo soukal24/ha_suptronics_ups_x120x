@@ -1,21 +1,27 @@
 import logging
+
 import gpiod
 
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DOMAIN
-from .config_flow import (
+from .const import (
     CONF_SENSOR_DEVICE_CLASS,
-    CONF_SENSOR_INVERT_LOGIC
+    CONF_SENSOR_INVERT_LOGIC,
+    DEFAULT_SENSOR_DEVICE_CLASS,
+    DEFAULT_SENSOR_INVERT_LOGIC,
+    DOMAIN,
+    PIN_POWER_LOSS,
+    shared_device_info,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# Physical pin number for detecting power loss (GPIO line).
-PIN_POWER_LOSS = 6
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     """
@@ -27,6 +33,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     ent = UpsPowerLossBinarySensor(hub, entry)
     async_add_entities([ent])
+
 
 class UpsPowerLossBinarySensor(BinarySensorEntity):
     """
@@ -45,6 +52,7 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         self._entry = config_entry
         self._line = None
         self._attr_is_on = False
+        self._attr_device_info = shared_device_info()
 
     @property
     def device_class(self):
@@ -52,7 +60,13 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         Returns the device_class for the sensor (e.g., 'problem' or 'power'),
         as configured in the Options Flow.
         """
-        return self._entry.options.get(CONF_SENSOR_DEVICE_CLASS, "problem")
+        value = self._entry.options.get(
+            CONF_SENSOR_DEVICE_CLASS, DEFAULT_SENSOR_DEVICE_CLASS
+        )
+        try:
+            return BinarySensorDeviceClass(value)
+        except ValueError:
+            return BinarySensorDeviceClass.PROBLEM
 
     async def async_added_to_hass(self):
         """
@@ -61,13 +75,17 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         await super().async_added_to_hass()
 
         # Read invert logic setting from options
-        invert = self._entry.options.get(CONF_SENSOR_INVERT_LOGIC, False)
+        invert = self._entry.options.get(
+            CONF_SENSOR_INVERT_LOGIC, DEFAULT_SENSOR_INVERT_LOGIC
+        )
 
-        # Request the GPIO line from the hub
-        self._line, is_on = self._hub.add_sensor(
-            port=PIN_POWER_LOSS,
-            active_low=invert,
-            bounce_ms=50
+        # Requesting the GPIO line does blocking ioctls, so run it in the executor
+        self._line, is_on = await self.hass.async_add_executor_job(
+            lambda: self._hub.add_sensor(
+                port=PIN_POWER_LOSS,
+                active_low=invert,
+                bounce_ms=50
+            )
         )
         self._attr_is_on = is_on
         _LOGGER.debug("PowerLoss sensor pin=%d => initial is_on=%s invert=%s", PIN_POWER_LOSS, is_on, invert)
@@ -83,7 +101,7 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         if self._line:
             _LOGGER.debug("Removing fd=%d, releasing line for pin=%d", self._line.fd, PIN_POWER_LOSS)
             self.hass.loop.remove_reader(self._line.fd)
-            self._line.release()
+            await self.hass.async_add_executor_job(self._line.release)
             self._line = None
 
     @callback
@@ -91,6 +109,8 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         """
         Callback to handle GPIO edge events from gpiod. Updates the state based on edge type.
         """
+        if self._line is None:
+            return
         for event in self._line.read_edge_events():
             if event.event_type == gpiod.EdgeEvent.Type.RISING_EDGE:
                 self._attr_is_on = True
