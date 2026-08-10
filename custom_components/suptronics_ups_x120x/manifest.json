@@ -10,5 +10,5 @@
     "issue_tracker": "https://github.com/soukal24/ha_suptronics_ups_x120x/issues",
     "requirements": ["smbus2", "gpiod>=2.2.1"],
     "single_config_entry": true,
-    "version": "2.1.0"
+    "version": "2.1.1"
 }

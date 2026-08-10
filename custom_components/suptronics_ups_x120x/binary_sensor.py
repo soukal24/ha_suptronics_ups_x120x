@@ -53,6 +53,8 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         self._line = None
         self._attr_is_on = False
         self._attr_device_info = shared_device_info()
+        # Force the pre-2.1.0 entity_id so users' automations keep working.
+        self.entity_id = "binary_sensor.ups_power"
 
     @property
     def device_class(self):

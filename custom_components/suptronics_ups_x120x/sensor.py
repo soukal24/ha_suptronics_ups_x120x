@@ -76,7 +76,16 @@ class BatteryLevelSensor(UpsSensorBase):
     _attr_unique_id = "ups_battery_level"
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_native_unit_of_measurement = PERCENTAGE
+    # Show whole percent in the UI (the exact value stays in the state)
+    _attr_suggested_display_precision = 0
     _register = REG_CAPACITY
+
+    def __init__(self, hub: SuptronicsHub):
+        super().__init__(hub)
+        # Force the pre-2.1.0 entity_id so users' automations keep working
+        # even on fresh installs where the device grouping would otherwise
+        # generate a different id.
+        self.entity_id = "sensor.ups_battery_level"
 
     def _convert(self, raw: int):
         return round(raw / 256.0, 2)
@@ -91,7 +100,14 @@ class BatteryVoltageSensor(UpsSensorBase):
     _attr_unique_id = "ups_battery_voltage"
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+    # Show two decimals in the UI, e.g. 4.16 V
+    _attr_suggested_display_precision = 2
     _register = REG_VOLTAGE
+
+    def __init__(self, hub: SuptronicsHub):
+        super().__init__(hub)
+        # Force the pre-2.1.0 entity_id so users' automations keep working.
+        self.entity_id = "sensor.ups_battery_voltage"
 
     def _convert(self, raw: int):
         # The scaling factor 78.125 uV per bit (from hardware datasheet).

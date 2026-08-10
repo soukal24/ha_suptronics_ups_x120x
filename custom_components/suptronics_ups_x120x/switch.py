@@ -40,6 +40,8 @@ class UpsChargingSwitch(SwitchEntity, RestoreEntity):
         self._line = None
         self._attr_is_on = False
         self._attr_device_info = shared_device_info()
+        # Force the pre-2.1.0 entity_id so users' automations keep working.
+        self.entity_id = "switch.ups_charging_on_off"
 
     async def async_added_to_hass(self) -> None:
         """

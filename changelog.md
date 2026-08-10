@@ -5,6 +5,26 @@ Use it as both the changelog and the release notes for GitHub.
 
 ---
 
+## [2.1.1] - 2026-08-10
+
+### Fixed
+- **Entity IDs are stable again**: version 2.1.0 grouped all entities under a
+  device, which caused Home Assistant to generate different entity IDs on
+  fresh installs (breaking automations that reference the documented IDs).
+  The original IDs (`sensor.ups_battery_level`, `sensor.ups_battery_voltage`,
+  `binary_sensor.ups_power`, `switch.ups_charging_on_off`) are now enforced
+  explicitly. Existing installs that only update are not affected.
+  If you re-added the integration on 2.1.0 and got different IDs, remove the
+  integration and add it again to get the original IDs back.
+
+### Changed
+- **Display precision**: battery voltage now shows two decimals by default
+  (e.g. 4.16 V) and battery level shows whole percent (e.g. 98 %). The exact
+  values are still recorded in history; you can override the precision per
+  entity in its settings.
+
+---
+
 ## [2.1.0] - 2026-08-07
 
 No new features, no breaking changes — this release focuses on robustness,
