@@ -1,27 +1,127 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "Suptronics X120x",
-                "description": "Set up the Suptronics X120x UPS. Make sure the I2C interface is enabled and the UPS board is connected, then confirm."
-            }
-        },
-        "error": {
-            "cannot_connect": "Could not reach the UPS on I2C bus 1 (address 0x36). Check that I2C is enabled and the board is properly connected."
-        },
-        "abort": {
-            "already_configured": "This integration is already configured. Only one instance is supported."
-        }
+  "config": {
+    "step": {
+      "user": {
+        "title": "Suptronics X120x",
+        "description": "Set up the Suptronics X120x UPS. Make sure the I2C interface is enabled and the UPS board is connected, then confirm."
+      }
     },
-    "options": {
-        "step": {
-            "init": {
-                "title": "Suptronics X120x options",
-                "data": {
-                    "Power sensor device class": "Power sensor device class",
-                    "Power sensor invert logic": "Invert power sensor logic"
-                }
-            }
-        }
+    "error": {
+      "cannot_connect": "Could not reach the UPS on I2C bus 1 (address 0x36). Check that I2C is enabled and the board is properly connected."
+    },
+    "abort": {
+      "already_configured": "This integration is already configured. Only one instance is supported."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Suptronics X120x options",
+        "data": {
+          "scan_interval": "Polling interval (seconds)",
+          "low_battery_threshold": "Low battery threshold (%)",
+          "Power sensor device class": "Legacy power sensor: device class",
+          "Power sensor invert logic": "Legacy power sensor: on when power is lost"
+        },
+        "data_description": {
+          "scan_interval": "How often the fuel gauge is read. A power loss is detected immediately regardless of this.",
+          "low_battery_threshold": "Below this level the Battery low sensor turns on and the status shows Battery low.",
+          "Power sensor device class": "Only affects binary_sensor.ups_power, kept from version 2.",
+          "Power sensor invert logic": "On: the sensor is on while mains power is lost (default). Off: on while mains power is present."
+        }
+      }
+    }
+  },
+  "selector": {
+    "power_sensor_device_class": {
+      "options": {
+        "problem": "Problem",
+        "power": "Power"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Battery"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "ups_status": {
+        "name": "Status",
+        "state": {
+          "online": "On line",
+          "charging": "Charging",
+          "on_battery": "On battery",
+          "low_battery": "Battery low",
+          "shutting_down": "Shutting down"
+        }
+      },
+      "battery_state": {
+        "name": "Battery level",
+        "state": {
+          "full": "Full",
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low",
+          "critical": "Critical"
+        }
+      },
+      "runtime_estimate": {
+        "name": "Estimated runtime"
+      },
+      "time_on_battery": {
+        "name": "Time on battery"
+      },
+      "last_power_loss": {
+        "name": "Last power loss"
+      },
+      "last_power_restored": {
+        "name": "Last power restored"
+      },
+      "power_outages": {
+        "name": "Power outages"
+      },
+      "shutdown_countdown": {
+        "name": "Shutdown countdown"
+      }
+    },
+    "binary_sensor": {
+      "ac_power": {
+        "name": "AC power"
+      },
+      "battery_charging": {
+        "name": "Charging"
+      },
+      "battery_low": {
+        "name": "Battery low"
+      },
+      "power_loss": {
+        "name": "Power loss"
+      }
+    },
+    "switch": {
+      "charging": {
+        "name": "Battery charging"
+      },
+      "auto_shutdown": {
+        "name": "Shutdown on low battery"
+      }
+    },
+    "number": {
+      "charge_limit_min": {
+        "name": "Charge below"
+      },
+      "charge_limit_max": {
+        "name": "Charge up to"
+      },
+      "shutdown_below": {
+        "name": "Shut down below"
+      },
+      "shutdown_after_minutes": {
+        "name": "Shut down after minutes on battery"
+      }
+    }
+  }
 }

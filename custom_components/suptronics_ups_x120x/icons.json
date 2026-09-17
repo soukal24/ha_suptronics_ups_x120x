@@ -1,0 +1,92 @@
+{
+  "entity": {
+    "sensor": {
+      "ups_status": {
+        "default": "mdi:power-plug",
+        "state": {
+          "online": "mdi:power-plug",
+          "charging": "mdi:battery-charging",
+          "on_battery": "mdi:power-plug-off",
+          "low_battery": "mdi:battery-alert-variant-outline",
+          "shutting_down": "mdi:power"
+        }
+      },
+      "battery_state": {
+        "default": "mdi:battery-heart-variant",
+        "state": {
+          "full": "mdi:battery",
+          "high": "mdi:battery-80",
+          "medium": "mdi:battery-50",
+          "low": "mdi:battery-20",
+          "critical": "mdi:battery-alert"
+        }
+      },
+      "runtime_estimate": {
+        "default": "mdi:battery-clock"
+      },
+      "time_on_battery": {
+        "default": "mdi:timer-outline"
+      },
+      "last_power_loss": {
+        "default": "mdi:flash-off"
+      },
+      "last_power_restored": {
+        "default": "mdi:flash"
+      },
+      "power_outages": {
+        "default": "mdi:counter"
+      },
+      "shutdown_countdown": {
+        "default": "mdi:timer-sand"
+      }
+    },
+    "binary_sensor": {
+      "ac_power": {
+        "default": "mdi:power-plug-off",
+        "state": {
+          "on": "mdi:power-plug"
+        }
+      },
+      "battery_charging": {
+        "default": "mdi:battery-arrow-down-outline",
+        "state": {
+          "on": "mdi:battery-charging"
+        }
+      },
+      "battery_low": {
+        "default": "mdi:battery-check",
+        "state": {
+          "on": "mdi:battery-alert"
+        }
+      }
+    },
+    "switch": {
+      "charging": {
+        "default": "mdi:battery-off-outline",
+        "state": {
+          "on": "mdi:battery-charging-outline"
+        }
+      },
+      "auto_shutdown": {
+        "default": "mdi:power-off",
+        "state": {
+          "on": "mdi:power-settings"
+        }
+      }
+    },
+    "number": {
+      "charge_limit_max": {
+        "default": "mdi:arrow-collapse-up"
+      },
+      "charge_limit_min": {
+        "default": "mdi:arrow-collapse-down"
+      },
+      "shutdown_below": {
+        "default": "mdi:battery-arrow-down"
+      },
+      "shutdown_after_minutes": {
+        "default": "mdi:timer-cog-outline"
+      }
+    }
+  }
+}

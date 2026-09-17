@@ -1,4 +1,5 @@
 {
-    "name": "Suptronics X120x UPS",
-    "render_readme": true
+  "name": "Suptronics X120x UPS",
+  "render_readme": true,
+  "homeassistant": "2024.12.0"
 }

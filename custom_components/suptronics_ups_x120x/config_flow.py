@@ -1,124 +1,131 @@
+"""Config flow for the Suptronics X120x integration."""
+
+from __future__ import annotations
+
 import logging
+from typing import Any
+
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .const import (
+    CONF_LOW_BATTERY,
+    CONF_SCAN_INTERVAL,
     CONF_SENSOR_DEVICE_CLASS,
     CONF_SENSOR_INVERT_LOGIC,
+    DEFAULT_LOW_BATTERY,
+    DEFAULT_SCAN_INTERVAL,
     DEFAULT_SENSOR_DEVICE_CLASS,
     DEFAULT_SENSOR_INVERT_LOGIC,
     DOMAIN,
+    POWER_SENSOR_DEVICE_CLASSES,
 )
-from .hub import check_device
+from .hardware import check_device
 
 _LOGGER = logging.getLogger(__name__)
 
-# Maps the internal device classes to user-friendly labels
-DEVICE_CLASS_LABELS = {
-    "problem": "Problem",
-    "power": "Power"
-}
-# Reverse map: user-friendly => internal
-USER_FRIENDLY_TO_INTERNAL = {v: k for k, v in DEVICE_CLASS_LABELS.items()}
 
+class SuptronicsConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Set up the one UPS this Raspberry Pi can carry.
 
-class SuptronicsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    There is nothing to ask: the board always sits on I2C bus 1 at 0x36 with
+    GPIO 6 and 16. The flow only checks that the gauge answers, so a board
+    that is missing or has I2C disabled is reported here and not as a config
+    entry that never loads.
     """
-    Config flow for Suptronics X120x:
-    - Step for first-time user setup (async_step_user).
-    - Creates a unique_id to avoid multiple instances.
-    - Verifies the UPS is actually reachable over I2C before creating the entry.
-    """
+
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
-        """
-        Called when the user first adds the integration (no prior configuration).
-        We verify the hardware is reachable, then create an entry with default options.
-        """
-        errors = {}
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm, then verify the hardware is reachable."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            # We only allow one instance (unique_id=DOMAIN).
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
-
-            # Blocking I2C access runs in the executor.
             try:
                 await self.hass.async_add_executor_job(check_device)
             except OSError as err:
                 _LOGGER.warning("UPS not reachable over I2C: %s", err)
                 errors["base"] = "cannot_connect"
             else:
-                # Provide default options
                 return self.async_create_entry(
                     title="Suptronics X120x",
-                    data={},  # no data needed
+                    data={},
                     options={
                         CONF_SENSOR_DEVICE_CLASS: DEFAULT_SENSOR_DEVICE_CLASS,
-                        CONF_SENSOR_INVERT_LOGIC: DEFAULT_SENSOR_INVERT_LOGIC
-                    }
+                        CONF_SENSOR_INVERT_LOGIC: DEFAULT_SENSOR_INVERT_LOGIC,
+                        CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+                        CONF_LOW_BATTERY: DEFAULT_LOW_BATTERY,
+                    },
                 )
-
-        # If no user_input yet (or the device was not found), show the form
         return self.async_show_form(step_id="user", errors=errors)
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        """
-        For later changes via the 'Options' button in the UI.
-        Returns an instance of the options flow.
-        """
-        return SuptronicsOptionsFlowHandler(config_entry)
+    def async_get_options_flow(config_entry: Any) -> SuptronicsOptionsFlow:
+        """Return the options flow."""
+        return SuptronicsOptionsFlow()
 
 
-class SuptronicsOptionsFlowHandler(config_entries.OptionsFlow):
-    """
-    Flow to manage advanced settings such as device_class and invert_logic.
-    """
+class SuptronicsOptionsFlow(OptionsFlow):
+    """Polling, thresholds and the behaviour of the legacy power sensor."""
 
-    def __init__(self, config_entry):
-        self._entry = config_entry
-
-    async def async_step_init(self, user_input=None):
-        """
-        Displays a form for changing the device_class and invert_logic.
-        """
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
         if user_input is not None:
-            # Convert user-friendly label to internal device_class
-            chosen_label = user_input[CONF_SENSOR_DEVICE_CLASS]
-            actual_device_class = USER_FRIENDLY_TO_INTERNAL[chosen_label]
-            user_invert = user_input[CONF_SENSOR_INVERT_LOGIC]
-
-            # Save new options (the integration reloads automatically via the
-            # update listener registered in __init__.py)
             return self.async_create_entry(
-                title="",
                 data={
-                    CONF_SENSOR_DEVICE_CLASS: actual_device_class,
-                    CONF_SENSOR_INVERT_LOGIC: user_invert
+                    CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                    CONF_LOW_BATTERY: int(user_input[CONF_LOW_BATTERY]),
+                    CONF_SENSOR_DEVICE_CLASS: user_input[CONF_SENSOR_DEVICE_CLASS],
+                    CONF_SENSOR_INVERT_LOGIC: bool(user_input[CONF_SENSOR_INVERT_LOGIC]),
                 }
             )
 
-        # Determine current (stored) device_class
-        current_internal = self._entry.options.get(
-            CONF_SENSOR_DEVICE_CLASS, DEFAULT_SENSOR_DEVICE_CLASS
+        options = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_SCAN_INTERVAL,
+                    default=options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                ): NumberSelector(
+                    NumberSelectorConfig(min=5, max=3600, step=1, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Required(
+                    CONF_LOW_BATTERY,
+                    default=options.get(CONF_LOW_BATTERY, DEFAULT_LOW_BATTERY),
+                ): NumberSelector(
+                    NumberSelectorConfig(min=1, max=99, step=1, mode=NumberSelectorMode.SLIDER)
+                ),
+                vol.Required(
+                    CONF_SENSOR_DEVICE_CLASS,
+                    default=options.get(CONF_SENSOR_DEVICE_CLASS, DEFAULT_SENSOR_DEVICE_CLASS),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=POWER_SENSOR_DEVICE_CLASSES,
+                        translation_key="power_sensor_device_class",
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    CONF_SENSOR_INVERT_LOGIC,
+                    default=options.get(CONF_SENSOR_INVERT_LOGIC, DEFAULT_SENSOR_INVERT_LOGIC),
+                ): BooleanSelector(),
+            }
         )
-        # Convert internal to user-friendly label
-        current_label = DEVICE_CLASS_LABELS.get(current_internal, "Problem")
-
-        current_invert = self._entry.options.get(
-            CONF_SENSOR_INVERT_LOGIC, DEFAULT_SENSOR_INVERT_LOGIC
-        )
-
-        data_schema = vol.Schema({
-            vol.Required(CONF_SENSOR_DEVICE_CLASS, default=current_label):
-                vol.In(DEVICE_CLASS_LABELS.values()),
-            vol.Required(CONF_SENSOR_INVERT_LOGIC, default=current_invert):
-                cv.boolean
-        })
-
-        return self.async_show_form(step_id="init", data_schema=data_schema)
+        return self.async_show_form(step_id="init", data_schema=schema)

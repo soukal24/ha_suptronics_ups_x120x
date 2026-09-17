@@ -1,27 +1,127 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "Suptronics X120x",
-                "description": "Nastavení UPS Suptronics X120x. Ujistěte se, že je povolené rozhraní I2C a deska UPS je připojená, poté potvrďte."
-            }
-        },
-        "error": {
-            "cannot_connect": "UPS nebyla nalezena na sběrnici I2C 1 (adresa 0x36). Zkontrolujte, že je I2C povolené a deska správně připojená."
-        },
-        "abort": {
-            "already_configured": "Integrace je již nastavena. Podporována je pouze jedna instance."
-        }
+  "config": {
+    "step": {
+      "user": {
+        "title": "Suptronics X120x",
+        "description": "Nastavení UPS Suptronics X120x. Ujistěte se, že je povolené rozhraní I2C a deska UPS je připojená, poté potvrďte."
+      }
     },
-    "options": {
-        "step": {
-            "init": {
-                "title": "Možnosti Suptronics X120x",
-                "data": {
-                    "Power sensor device class": "Třída zařízení senzoru napájení",
-                    "Power sensor invert logic": "Invertovat logiku senzoru napájení"
-                }
-            }
-        }
+    "error": {
+      "cannot_connect": "UPS nebyla nalezena na sběrnici I2C 1 (adresa 0x36). Zkontrolujte, že je I2C povolené a deska správně připojená."
+    },
+    "abort": {
+      "already_configured": "Integrace je již nastavena. Podporována je pouze jedna instance."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti Suptronics X120x",
+        "data": {
+          "scan_interval": "Interval čtení (sekundy)",
+          "low_battery_threshold": "Práh slabé baterie (%)",
+          "Power sensor device class": "Starší senzor napájení: třída zařízení",
+          "Power sensor invert logic": "Starší senzor napájení: zapnuto při výpadku"
+        },
+        "data_description": {
+          "scan_interval": "Jak často se čte měřič baterie. Výpadek napájení se pozná okamžitě bez ohledu na tuto hodnotu.",
+          "low_battery_threshold": "Pod touto úrovní se zapne senzor Slabá baterie a stav ukáže Slabá baterie.",
+          "Power sensor device class": "Ovlivňuje jen binary_sensor.ups_power, zachovaný z verze 2.",
+          "Power sensor invert logic": "Zapnuto: senzor je zapnutý při výpadku sítě (výchozí). Vypnuto: zapnutý, když síť je."
+        }
+      }
+    }
+  },
+  "selector": {
+    "power_sensor_device_class": {
+      "options": {
+        "problem": "Problém",
+        "power": "Napájení"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Baterie"
+      },
+      "battery_voltage": {
+        "name": "Napětí baterie"
+      },
+      "ups_status": {
+        "name": "Stav",
+        "state": {
+          "online": "Na síti",
+          "charging": "Nabíjí se",
+          "on_battery": "Na baterii",
+          "low_battery": "Slabá baterie",
+          "shutting_down": "Vypíná se"
+        }
+      },
+      "battery_state": {
+        "name": "Úroveň baterie",
+        "state": {
+          "full": "Plná",
+          "high": "Vysoká",
+          "medium": "Střední",
+          "low": "Nízká",
+          "critical": "Kritická"
+        }
+      },
+      "runtime_estimate": {
+        "name": "Odhadovaná výdrž"
+      },
+      "time_on_battery": {
+        "name": "Doba na baterii"
+      },
+      "last_power_loss": {
+        "name": "Poslední výpadek"
+      },
+      "last_power_restored": {
+        "name": "Poslední obnovení napájení"
+      },
+      "power_outages": {
+        "name": "Počet výpadků"
+      },
+      "shutdown_countdown": {
+        "name": "Odpočet do vypnutí"
+      }
+    },
+    "binary_sensor": {
+      "ac_power": {
+        "name": "Síťové napájení"
+      },
+      "battery_charging": {
+        "name": "Nabíjení"
+      },
+      "battery_low": {
+        "name": "Slabá baterie"
+      },
+      "power_loss": {
+        "name": "Výpadek napájení"
+      }
+    },
+    "switch": {
+      "charging": {
+        "name": "Nabíjení baterie"
+      },
+      "auto_shutdown": {
+        "name": "Vypnout při slabé baterii"
+      }
+    },
+    "number": {
+      "charge_limit_min": {
+        "name": "Nabíjet pod"
+      },
+      "charge_limit_max": {
+        "name": "Nabíjet do"
+      },
+      "shutdown_below": {
+        "name": "Vypnout pod"
+      },
+      "shutdown_after_minutes": {
+        "name": "Vypnout po minutách na baterii"
+      }
+    }
+  }
 }

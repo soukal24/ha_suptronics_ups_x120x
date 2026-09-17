@@ -5,6 +5,58 @@ Use it as both the changelog and the release notes for GitHub.
 
 ---
 
+## [3.0.0] - unreleased
+
+A complete rework. Every entity from 2.x keeps its `unique_id` and its
+`entity_id`, the device keeps its identifier and the two options keep their
+keys, so an update carries history, automations and settings over.
+
+### Added
+- **Charge window** (`number` *Charge below* / *Charge up to*) with
+  hysteresis, enforced by the integration itself. Defaults 95-100 % match
+  the board.
+- **Automatic shutdown** (`switch` *Shutdown on low battery*, `number`
+  *Shut down below* and *Shut down after minutes on battery*): clean host
+  shutdown via `hassio.host_shutdown`, or the `suptronics_ups_x120x_shutdown`
+  event on installs that cannot shut themselves down. One minute of
+  confirmation, three minutes of grace after startup, mains always wins, a
+  persistent notification while the countdown runs.
+- **Estimated runtime** sensor, learned from the measured discharge rate of
+  real outages and shown on mains as well once one has been measured.
+- **Status** enum sensor (`online`, `charging`, `on_battery`, `low_battery`,
+  `shutting_down`), **Battery level** band, **AC power**, **Charging** and
+  **Battery low** binary sensors.
+- **Time on battery**, **Last power loss**, **Last power restored**,
+  **Power outages** and **Shutdown countdown** sensors.
+- **Dashboard card** `custom:suptronics-ups-card` (full / compact / slim /
+  gauge), served and registered as a Lovelace resource by the integration.
+  Follows the Home Assistant language (English, Czech), `language:` overrides.
+- **Instant power-loss detection**: the GPIO edge triggers a refresh at once
+  instead of waiting for the next poll.
+- **Diagnostics** download on the device page.
+- Options: polling interval and low battery threshold.
+- Czech translation of everything, including the shutdown notifications.
+- Tests (`tests/`, pytest-homeassistant-custom-component).
+
+### Changed
+- One coordinator owns the hardware for the whole life of the entry. The
+  charge pin is held open and its state re-applied on every poll, which fixes
+  the switch "turning itself back on" reported on 2.x: previously the line was
+  released on every reload and a failed pin request made the switch silently
+  ignore commands.
+- Settings (charge switch, limits, shutdown rules, learned discharge rate,
+  outage counters) are persisted in `.storage`, not restored per entity.
+- The legacy `binary_sensor.ups_power` keeps its options (device class,
+  invert logic) and its meaning; the new `AC power` sensor is the plain one.
+- Battery level and voltage are read by the coordinator instead of per
+  entity.
+
+### Credits
+- Reworked with the X120X integration by mesgas (MIT) as a reference; see
+  THIRD_PARTY_NOTICES.md.
+
+---
+
 ## [2.1.1] - 2026-08-10
 
 ### Fixed

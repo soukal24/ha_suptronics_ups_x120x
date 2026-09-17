@@ -1,115 +1,176 @@
-# Suptronics UPS X120x Home Assistant Integration
+# Suptronics UPS X120x for Home Assistant
 
-Integration for Suptronics UPS X120x boards (models X1200, X1201, and X1202).  
-Allows monitoring and management of your Suptronics UPS directly in Home Assistant.
+Custom integration for the Suptronics / Geekworm **X120x** UPS boards
+(X1200, X1201, X1202) on a Raspberry Pi 5 running Home Assistant.
 
-![UPS Integration Screenshot](ups.png)
+Czech documentation: [README.cs.md](README.cs.md).
 
-## Features
-- Monitor UPS battery level as a percentage
-- Monitor UPS battery voltage
-- Power-loss detection via binary sensor
-- Switch for turning charging on/off
-- Automatic updates of sensor values
+Version 3.0 is a complete rework: the integration now enforces charge limits
+and shuts the Pi down on its own, estimates the remaining runtime, reacts to a
+power loss the moment it happens, and ships an animated dashboard card. Every
+entity from version 2 keeps its id, so existing automations and history carry
+over.
 
-## Requirements
-- **I2C interface enabled** on your device (Raspberry Pi or similar).  
-- Python packages `smbus2` and `gpiod` (handled automatically by Home Assistant if requirements are specified in `manifest.json`).
+## What it creates
+
+One **device**, *Suptronics X120x*, with these entities:
+
+| Entity | Type | Notes |
+|---|---|---|
+| Battery (`sensor.ups_battery_level`) | sensor | percent, from the fuel gauge |
+| Battery voltage (`sensor.ups_battery_voltage`) | sensor | volts |
+| Power loss (`binary_sensor.ups_power`) | binary sensor | the 2.x sensor: on while mains power is lost (configurable) |
+| Battery charging (`switch.ups_charging_on_off`) | switch | master switch for charging |
+| Status | sensor (enum) | `online`, `charging`, `on_battery`, `low_battery`, `shutting_down` |
+| Battery level | sensor (enum) | full / high / medium / low / critical |
+| AC power | binary sensor | mains present |
+| Charging | binary sensor | the pack is actually being charged |
+| Battery low | binary sensor | below the configurable threshold |
+| Estimated runtime | sensor | minutes left on battery, learned from real outages |
+| Time on battery | sensor | minutes since mains was lost |
+| Last power loss / Last power restored | sensor | timestamps |
+| Power outages | sensor | counter |
+| Charge below / Charge up to | number | the charge window |
+| Shutdown on low battery | switch | automatic clean shutdown, off by default |
+| Shut down below | number | battery level for the shutdown |
+| Shut down after minutes on battery | number | time rule for the shutdown, 0 = off |
+| Shutdown countdown | sensor | seconds until the shutdown, while one is pending |
+
+### The charge window
+
+*Charge up to* and *Charge below* define a range with hysteresis, enforced by
+the integration itself: charging stops at the upper limit and only resumes
+once the level has fallen back to the lower one. Set them to 60 and 80 and
+the pack stays in the band that slows its ageing, with no automation. The
+defaults (95 to 100) match the board's own behaviour.
+
+*Battery charging* is the master switch: with it off the pack never charges.
+The setting is re-applied on every poll, so the board cannot drift back to
+charging on its own, and it is persisted across restarts.
+
+### Automatic shutdown
+
+Turn *Shutdown on low battery* on and the Raspberry Pi is shut down cleanly
+when the UPS is on battery and either rule fires:
+
+- the battery is at or below *Shut down below*, or
+- the UPS has been on battery for *Shut down after minutes on battery*.
+
+Safety margins: mains power always wins and cancels a pending shutdown; the
+condition has to hold for a full minute; nothing happens in the first three
+minutes after Home Assistant starts; a persistent notification tells you how
+to stop it. On Home Assistant OS and Supervised the shutdown uses
+`hassio.host_shutdown`. On other install types the integration fires the
+`suptronics_ups_x120x_shutdown` event instead, with `reason`, `capacity`,
+`voltage` and `time_on_battery`, so an automation can do it.
+
+For the Pi to power **back on** when mains returns, the Pi 5 must really power
+off on halt. Set once in the EEPROM from Raspberry Pi OS:
+
+```
+sudo rpi-eeprom-config -e
+POWER_OFF_ON_HALT=1
+PSU_MAX_CURRENT=5000
+```
+
+### Runtime estimate
+
+During an outage the integration measures how fast the pack drains and shows
+the minutes left. The rate is remembered, so after the first real outage the
+estimate is shown on mains too, as "what you would get if the power went
+now". It stays *unknown* until an outage of at least two minutes has been
+measured.
+
+## The dashboard card
+
+The integration serves an animated card and registers it as a dashboard
+resource by itself. Add it in the card picker as *Suptronics UPS*, or in YAML:
+
+```yaml
+type: custom:suptronics-ups-card
+variant: full        # full | compact | slim | gauge
+hours: 24            # sparkline history
+name: Rack UPS       # optional title
+language: cs         # optional, defaults to the Home Assistant language
+```
+
+It finds the entities on its own. Chips show mains state, charging, battery
+health, the estimated runtime, the time on battery during an outage, the
+charge window and whether the automatic shutdown is armed; the status pill
+shows the countdown while a shutdown is pending. Every element opens the
+more-info dialog of its entity. Force single blocks with `show_flow`,
+`show_sparkline`, `show_chips`, `show_button`.
+
+If the card does not appear after an update, reload the browser page with
+Ctrl+F5.
 
 ## Installation
 
-### 1) Manual Copy
-1. Download (or clone) this repository.
-2. Copy the folder `suptronics_ups_x120x` into your Home Assistant `custom_components` folder.
-   - Your final path might look like:  
-     `config/custom_components/suptronics_ups_x120x/`
+### HACS
 
-### 2) Enable I2C
-I2C is required for reading battery levels from the Suptronics board.
+Add `https://github.com/soukal24/ha_suptronics_ups_x120x` as a custom
+repository (category *Integration*), install *Suptronics X120x UPS* and
+restart Home Assistant.
 
-- **Home Assistant OS (HassOS)**  
-  Follow the [official instructions](https://www.home-assistant.io/common-tasks/os/#enable-i2c) or use the [HassOS I2C Configurator addon](https://community.home-assistant.io/t/add-on-hassos-i2c-configurator/264167).  
+### Manual
 
-- **Home Assistant Core / Raspberry Pi OS**  
-  1. Enable I2C interface:  
-     ```bash
-     sudo raspi-config
-     ```
-     Choose `Interfacing options -> I2C`, select `<Yes>`, then finish and reboot.
-  2. Install additional packages (e.g., `i2c-tools`, `libi2c-dev`, etc.) if needed.  
-     ```bash
-     sudo apt-get install build-essential libi2c-dev i2c-tools python-dev libffi-dev
-     ```
-     Add your `homeassistant` user to the i2c group:
-     ```bash
-     sudo addgroup homeassistant i2c
-     sudo reboot
-     ```
-  3. (Optional) Check the I2C address using:
-     ```bash
-     /usr/sbin/i2cdetect -y 1
-     ```
+Copy `custom_components/suptronics_ups_x120x/` into your `config/` directory
+and restart.
 
-### 3) Add Integration in Home Assistant
-1. **Restart Home Assistant** after placing the files in `custom_components`.
-2. Go to **Settings > Devices & Services** in Home Assistant.
-3. Click **“Add Integration”** and search for **“Suptronics X120x”**.  
-4. Add the integration. No extra input is required during setup. The integration will create sensors for battery level and voltage automatically.
+### I2C
 
-> **Important:** If you have used a previous version that was configured in `configuration.yaml`, you must remove those old entries before using the new version. This integration is now fully managed from the UI and does not require YAML configuration.
+`/dev/i2c-1` has to exist. On Home Assistant OS add `dtparam=i2c_arm=on` to
+`config.txt` on the boot partition (or use the HassOS I2C Configurator
+add-on) and reboot.
 
-### 4) Optional: GPIO-based Sensors/Switches
-If you want to manage additional features (like detecting power loss or controlling charging) at the GPIO level, you can rely on the built-in `binary_sensor` and `switch` platforms within this integration. After enabling the config flow, you will see:
-- A binary sensor named “UPS Power” for detecting power loss.
-- A switch named “UPS charging ON/OFF” to start/stop charging.
+### Setup
 
-#### Changing Device Class or Invert Logic
-If you need to adjust the power sensor device class or invert logic, go to **Settings > Devices & Services > Integrations**.  
-Find **Suptronics X120x**, click **“Configure”**, and modify options as needed.
+*Settings → Devices & services → Add integration → Suptronics X120x*. The
+integration checks that the fuel gauge answers before creating the entry.
 
-### Usage
-- **Battery sensors**:  
-  - `sensor.ups_battery_level` (percentage)  
-  - `sensor.ups_battery_voltage` (volts)
+**Options** (Configure on the integration): polling interval, low battery
+threshold, and the class and polarity of the legacy *Power loss* sensor.
 
-- **Binary Sensor**:  
-  - `binary_sensor.ups_power`  
-  Shows `on` if power is lost (depending on invert logic settings).
+## Upgrading from 2.x
 
-- **Switch**:  
-  - `switch.ups_charging_on_off`  
-  Allows you to turn charging on or off.
+Just update. The device and the four original entities keep their ids and
+their history; the settings dialog keeps its two options. New entities
+appear next to them. Any automation you had that toggled the charging switch
+by battery level can be removed in favour of the charge window.
 
-### Upgrading from a previous version
-- Remove or comment out any old `suptronics_ups_x120x:` entries from your `configuration.yaml`.
-- Remove old references to manual GPIO config if you previously used `rpi_gpio` or custom YAML for controlling the UPS.
-- Copy the new version of the integration into `custom_components`.
-- Restart Home Assistant and add the integration from the UI if needed. The system should pick up your existing configuration (if properly migrated).
+## Troubleshooting
 
-### Troubleshooting
+- **"Could not reach the UPS" during setup**: I2C is not enabled, or the
+  board is not seated on the header. `i2cdetect -y 1` should show `36`.
+- **500 Internal Server Error when adding the integration** with
+  `TypeError: 'NoneType' object is not subscriptable` in the log: corrupted
+  `/config/deps`. Run `rm -rf /config/deps` from the Terminal add-on and
+  restart Home Assistant.
+- **Diagnostics**: the device page offers a diagnostics download with the
+  current readings, all settings and the GPIO chips found.
+- **Debug log**:
 
-#### "500 Internal Server Error" when adding the integration
-If adding the integration fails immediately with a *500 Internal Server Error* and the log shows
-`TypeError: 'NoneType' object is not subscriptable` in `importlib_metadata`, the problem is **not**
-in this integration. Home Assistant Core crashes while checking the integration's Python
-requirements because of corrupted package leftovers in the `/config/deps` folder (this typically
-happens after a Core update that changes the Python version).
-
-**Fix:**
-1. Open the Terminal/SSH add-on.
-2. Run: `rm -rf /config/deps`
-3. Restart Home Assistant.
-4. Add the integration again — Home Assistant will re-download the requirements cleanly.
-
-#### "Could not reach the UPS" during setup
-- Make sure the I2C interface is enabled (see the installation steps above).
-- Check the board is properly seated on the GPIO header.
-- Optionally verify the device is visible at address `0x36` with `i2cdetect -y 1`.
-
-### Debugging
-If you have issues, enable debug logging. Add the following to `configuration.yaml`:
 ```yaml
 logger:
-  default: info
   logs:
     custom_components.suptronics_ups_x120x: debug
+```
+
+## How it works
+
+| What | Where | Detail |
+|---|---|---|
+| Cell voltage | I2C `0x36`, register `0x02` | 78.125 µV per LSB |
+| State of charge | I2C `0x36`, register `0x04` | 1/256 % per LSB |
+| Mains present | GPIO 6 | high while the adapter supplies power; edge events give instant detection |
+| Charge control | GPIO 16 | driven high stops charging, low charges (the vendor's `pinctrl set 16 op dh/dl`) |
+
+Both GPIO lines are held for the whole life of the integration. Releasing
+the charge line returns the board to its default, which is charging.
+
+## Credits and licence
+
+MIT, see [LICENSE](LICENSE). Version 3.0 was reworked with the
+[X120X integration by mesgas](https://github.com/mesgas/Suptronics-X120x-homeassistant)
+as a reference; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Not affiliated with Suptronics or Geekworm.

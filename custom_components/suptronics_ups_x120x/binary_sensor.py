@@ -1,13 +1,16 @@
-import logging
+"""Binary sensors for the Suptronics X120x UPS."""
 
-import gpiod
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
+    BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -15,54 +18,88 @@ from .const import (
     CONF_SENSOR_INVERT_LOGIC,
     DEFAULT_SENSOR_DEVICE_CLASS,
     DEFAULT_SENSOR_INVERT_LOGIC,
-    DOMAIN,
-    PIN_POWER_LOSS,
-    shared_device_info,
+)
+from .coordinator import UpsConfigEntry, UpsCoordinator, UpsState
+from .entity import UpsEntity
+
+
+@dataclass(frozen=True, kw_only=True)
+class UpsBinarySensorDescription(BinarySensorEntityDescription):
+    """Describes a UPS binary sensor."""
+
+    value_fn: Callable[[UpsState, UpsCoordinator], bool]
+
+
+BINARY_SENSORS: tuple[UpsBinarySensorDescription, ...] = (
+    UpsBinarySensorDescription(
+        key="ac_power",
+        device_class=BinarySensorDeviceClass.PLUG,
+        value_fn=lambda state, _: state.ac_present,
+    ),
+    UpsBinarySensorDescription(
+        key="battery_charging",
+        device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
+        value_fn=lambda state, _: state.is_charging,
+    ),
+    UpsBinarySensorDescription(
+        key="battery_low",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        value_fn=lambda state, coordinator: state.capacity < coordinator.low_battery_threshold,
+    ),
 )
 
-_LOGGER = logging.getLogger(__name__)
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: UpsConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the UPS binary sensors."""
+    coordinator = entry.runtime_data
+    entities: list[BinarySensorEntity] = [
+        UpsBinarySensor(coordinator, description) for description in BINARY_SENSORS
+    ]
+    entities.append(UpsPowerLossSensor(coordinator))
+    async_add_entities(entities)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """
-    Setup for the binary_sensor platform. Called automatically when the integration is loaded.
-    """
-    _LOGGER.debug("binary_sensor => async_setup_entry")
-    data = hass.data[DOMAIN][entry.entry_id]
-    hub = data["hub"]
+class UpsBinarySensor(UpsEntity, BinarySensorEntity):
+    """A boolean state derived from the UPS."""
 
-    ent = UpsPowerLossBinarySensor(hub, entry)
-    async_add_entities([ent])
+    entity_description: UpsBinarySensorDescription
 
-
-class UpsPowerLossBinarySensor(BinarySensorEntity):
-    """
-    Represents the UPS Power Loss detection as a binary sensor entity.
-    This sensor reads from GPIO line events to detect power loss.
-    """
-    _attr_name = "UPS Power"
-    _attr_unique_id = "ups_power_loss"
-    _attr_should_poll = False
-
-    def __init__(self, hub, config_entry: ConfigEntry):
-        """
-        Store the hub for GPIO operations and the config entry for advanced settings.
-        """
-        self._hub = hub
-        self._entry = config_entry
-        self._line = None
-        self._attr_is_on = False
-        self._attr_device_info = shared_device_info()
-        # Force the pre-2.1.0 entity_id so users' automations keep working.
-        self.entity_id = "binary_sensor.ups_power"
+    def __init__(
+        self, coordinator: UpsCoordinator, description: UpsBinarySensorDescription
+    ) -> None:
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
 
     @property
-    def device_class(self):
-        """
-        Returns the device_class for the sensor (e.g., 'problem' or 'power'),
-        as configured in the Options Flow.
-        """
-        value = self._entry.options.get(
+    def is_on(self) -> bool:
+        """Return the current state."""
+        return self.entity_description.value_fn(self.coordinator.data, self.coordinator)
+
+
+class UpsPowerLossSensor(UpsEntity, BinarySensorEntity):
+    """The power-loss sensor of version 2.x, kept for existing automations.
+
+    Its device class and polarity come from the options the user chose in
+    2.x: by default it is a "problem" that is on while mains power is gone.
+    With invert logic off it is on while mains power is present instead.
+    """
+
+    def __init__(self, coordinator: UpsCoordinator) -> None:
+        super().__init__(
+            coordinator,
+            "power_loss",
+            legacy_unique_id="ups_power_loss",
+            legacy_entity_id="binary_sensor.ups_power",
+        )
+
+    @property
+    def device_class(self) -> BinarySensorDeviceClass:
+        """The class chosen in the options, "problem" unless changed."""
+        value = self.coordinator.config_entry.options.get(
             CONF_SENSOR_DEVICE_CLASS, DEFAULT_SENSOR_DEVICE_CLASS
         )
         try:
@@ -70,53 +107,11 @@ class UpsPowerLossBinarySensor(BinarySensorEntity):
         except ValueError:
             return BinarySensorDeviceClass.PROBLEM
 
-    async def async_added_to_hass(self):
-        """
-        Called when the entity is added to Home Assistant. We configure and start listening for GPIO events here.
-        """
-        await super().async_added_to_hass()
-
-        # Read invert logic setting from options
-        invert = self._entry.options.get(
+    @property
+    def is_on(self) -> bool:
+        """On while mains power is lost (or present, with invert logic off)."""
+        invert = self.coordinator.config_entry.options.get(
             CONF_SENSOR_INVERT_LOGIC, DEFAULT_SENSOR_INVERT_LOGIC
         )
-
-        # Requesting the GPIO line does blocking ioctls, so run it in the executor
-        self._line, is_on = await self.hass.async_add_executor_job(
-            lambda: self._hub.add_sensor(
-                port=PIN_POWER_LOSS,
-                active_low=invert,
-                bounce_ms=50
-            )
-        )
-        self._attr_is_on = is_on
-        _LOGGER.debug("PowerLoss sensor pin=%d => initial is_on=%s invert=%s", PIN_POWER_LOSS, is_on, invert)
-
-        # Add a reader to event loop to handle GPIO events
-        self.hass.loop.add_reader(self._line.fd, self._handle_gpio_event)
-
-    async def async_will_remove_from_hass(self):
-        """
-        Called when the entity is about to be removed. We release the GPIO line and stop reading events.
-        """
-        await super().async_will_remove_from_hass()
-        if self._line:
-            _LOGGER.debug("Removing fd=%d, releasing line for pin=%d", self._line.fd, PIN_POWER_LOSS)
-            self.hass.loop.remove_reader(self._line.fd)
-            await self.hass.async_add_executor_job(self._line.release)
-            self._line = None
-
-    @callback
-    def _handle_gpio_event(self):
-        """
-        Callback to handle GPIO edge events from gpiod. Updates the state based on edge type.
-        """
-        if self._line is None:
-            return
-        for event in self._line.read_edge_events():
-            if event.event_type == gpiod.EdgeEvent.Type.RISING_EDGE:
-                self._attr_is_on = True
-            else:
-                self._attr_is_on = False
-
-        self.schedule_update_ha_state(False)
+        ac_present = self.coordinator.data.ac_present
+        return (not ac_present) if invert else ac_present
