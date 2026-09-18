@@ -34,7 +34,7 @@ be copied between systems.
 | Time on battery | `sensor.ups_time_on_battery` | minutes since mains was lost |
 | Last power loss | `sensor.ups_last_power_loss` | timestamp |
 | Last power restored | `sensor.ups_last_power_restored` | timestamp |
-| Power outages | `sensor.ups_power_outages` | counter |
+| Power outages | `sensor.ups_power_outages` | counter since the integration was installed (the card shows the count in its history window) |
 | Charge below | `number.ups_charge_limit_min` | lower end of the charge window |
 | Charge up to | `number.ups_charge_limit_max` | upper end of the charge window |
 | Shutdown on low battery | `switch.ups_auto_shutdown` | automatic clean shutdown, off by default |

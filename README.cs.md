@@ -31,7 +31,7 @@ kopírovat mezi systémy.
 | Doba na baterii | `sensor.ups_time_on_battery` | minuty od výpadku sítě |
 | Poslední výpadek | `sensor.ups_last_power_loss` | časová značka |
 | Poslední obnovení napájení | `sensor.ups_last_power_restored` | časová značka |
-| Počet výpadků | `sensor.ups_power_outages` | počítadlo |
+| Počet výpadků | `sensor.ups_power_outages` | počítadlo od instalace integrace (karta ukazuje počet za své období historie) |
 | Nabíjet pod | `number.ups_charge_limit_min` | dolní mez okna nabíjení |
 | Nabíjet do | `number.ups_charge_limit_max` | horní mez okna nabíjení |
 | Vypnout při slabé baterii | `switch.ups_auto_shutdown` | automatické čisté vypnutí, výchozí vypnuto |

@@ -78,7 +78,8 @@ const STRINGS = {
     runtime_hint: "estimated",
     on_battery: "On battery",
     last_loss: "Last outage",
-    outages: "Outages",
+    outages_window: "Outages, last {hours} h",
+    outages_total: "Outages since install",
     voltage: "Voltage",
     never: "never",
     unknown: "--",
@@ -112,7 +113,8 @@ const STRINGS = {
     runtime_hint: "odhad",
     on_battery: "Na baterii",
     last_loss: "Poslední výpadek",
-    outages: "Výpadků",
+    outages_window: "Výpadků za {hours} h",
+    outages_total: "Výpadků od instalace",
     voltage: "Napětí",
     never: "zatím žádný",
     unknown: "--",
@@ -376,7 +378,10 @@ class SuptronicsUpsCard extends HTMLElement {
       this._mainsTrace = acId
         ? this._segmentsBinary(response?.[acId] || [], start.getTime(), end.getTime())
         : null;
-      if (this._built) this._drawHistory();
+      if (this._built) {
+        this._drawHistory();
+        this._renderOutages();
+      }
     } catch (err) {
       console.warn(`${CARD_TYPE}: could not read history`, err);
       this._batteryTrace = null;
@@ -544,7 +549,7 @@ class SuptronicsUpsCard extends HTMLElement {
     this._el.runtimeLabel.textContent = this._t("runtime");
     this._el.onBatteryLabel.textContent = this._t("on_battery");
     this._el.voltageLabel.textContent = this._t("voltage");
-    this._el.outagesLabel.textContent = this._t("outages");
+    this._el.outagesLabel.textContent = this._t("outages_total");
     this._el.historyBattery.textContent = this._t("battery_history", {
       hours: Number(this._config.hours) || DEFAULT_HISTORY_HOURS,
     });
@@ -675,8 +680,7 @@ class SuptronicsUpsCard extends HTMLElement {
       );
     }
     this._el.voltageValue.textContent = voltage === null ? "--" : `${voltage.toFixed(2)} V`;
-    const outages = this._number("outages");
-    this._el.outagesValue.textContent = outages === null ? "--" : String(Math.round(outages));
+    this._renderOutages();
 
     // --- actions ------------------------------------------------------------
     const chargeSwitch = this._state("charge_switch");
@@ -702,6 +706,24 @@ class SuptronicsUpsCard extends HTMLElement {
     this._updateExtras();
 
     if (this._shown.history) this._drawHistory();
+  }
+
+  /**
+   * Outages in the history window, counted from the recorder's mains trace,
+   * so the tile matches the strip below it. Without a recorder (or before
+   * the first fetch) the integration's all-time counter is shown instead.
+   */
+  _renderOutages() {
+    const hours = Number(this._config.hours) || DEFAULT_HISTORY_HOURS;
+    if (this._mainsTrace) {
+      const count = this._mainsTrace.filter((seg) => !seg.on).length;
+      this._el.outagesLabel.textContent = this._t("outages_window", { hours });
+      this._el.outagesValue.textContent = String(count);
+      return;
+    }
+    const total = this._number("outages");
+    this._el.outagesLabel.textContent = this._t("outages_total");
+    this._el.outagesValue.textContent = total === null ? "--" : String(Math.round(total));
   }
 
   /** A tile value; long texts get a smaller size and may wrap. */
