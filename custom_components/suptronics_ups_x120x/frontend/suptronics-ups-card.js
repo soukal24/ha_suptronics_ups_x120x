@@ -88,8 +88,9 @@ const STRINGS = {
     history_collecting: "history is being collected",
     now: "now",
     hours_ago: "-{hours} h",
-    window: "Window {min}-{max} %",
-    limit: "Charge up to {max} %",
+    window: "Charging to {min}-{max} %",
+    limit: "Charging to {max} %",
+    ago: "{time} ago",
     charging_enabled: "Charging on",
     charging_paused: "Charging paused",
     shutdown_on: "Auto shutdown on",
@@ -121,8 +122,9 @@ const STRINGS = {
     history_collecting: "historie se teprve sbírá",
     now: "teď",
     hours_ago: "-{hours} h",
-    window: "Okno {min}–{max} %",
-    limit: "Nabíjet do {max} %",
+    window: "Nabíjení na {min}–{max} %",
+    limit: "Nabíjení do {max} %",
+    ago: "před {time}",
     charging_enabled: "Nabíjení zapnuto",
     charging_paused: "Nabíjení pozastaveno",
     shutdown_on: "Auto vypnutí zapnuto",
@@ -321,12 +323,19 @@ class SuptronicsUpsCard extends HTMLElement {
     return `${h} ${this._t("hours_short")} ${m} ${this._t("minutes_short")}`;
   }
 
+  /** Only the largest unit: "25 min", "3 h", "2 d". */
+  _durationCompact(minutes) {
+    const total = Math.max(0, Math.round(minutes));
+    if (total < 60) return `${total} ${this._t("minutes_short")}`;
+    return `${Math.round(total / 60)} ${this._t("hours_short")}`;
+  }
+
   _relativeTime(iso) {
     const stamp = Date.parse(iso);
     if (!Number.isFinite(stamp)) return this._t("never");
     const minutes = Math.round((Date.now() - stamp) / 60000);
     if (minutes < 1) return this._t("now");
-    if (minutes < 24 * 60) return `-${this._duration(minutes)}`;
+    if (minutes < 24 * 60) return this._t("ago", { time: this._durationCompact(minutes) });
     const date = new Date(stamp);
     try {
       return date.toLocaleDateString(this._hass.locale?.language || undefined, {
@@ -648,20 +657,22 @@ class SuptronicsUpsCard extends HTMLElement {
 
     // --- stats --------------------------------------------------------------
     const runtime = this._number("runtime");
-    this._el.runtimeValue.textContent = runtime === null ? this._t("unknown") : this._duration(runtime);
+    this._setStat(this._el.runtimeValue, runtime === null ? this._t("unknown") : this._duration(runtime));
     this._el.runtimeHint.textContent = runtime === null ? "" : this._t("runtime_hint");
 
     const onBattery = this._number("on_battery");
     const lastLoss = this._state("last_loss");
     if (!acOn && onBattery !== null) {
       this._el.onBatteryLabel.textContent = this._t("on_battery");
-      this._el.onBatteryValue.textContent = this._duration(onBattery);
+      this._setStat(this._el.onBatteryValue, this._duration(onBattery));
     } else {
       this._el.onBatteryLabel.textContent = this._t("last_loss");
-      this._el.onBatteryValue.textContent =
+      this._setStat(
+        this._el.onBatteryValue,
         lastLoss && lastLoss.state && lastLoss.state !== "unknown"
           ? this._relativeTime(lastLoss.state)
-          : this._t("never");
+          : this._t("never")
+      );
     }
     this._el.voltageValue.textContent = voltage === null ? "--" : `${voltage.toFixed(2)} V`;
     const outages = this._number("outages");
@@ -691,6 +702,12 @@ class SuptronicsUpsCard extends HTMLElement {
     this._updateExtras();
 
     if (this._shown.history) this._drawHistory();
+  }
+
+  /** A tile value; long texts get a smaller size and may wrap. */
+  _setStat(node, text) {
+    node.textContent = text;
+    node.classList.toggle("long", text.length > 8);
   }
 
   _renderWindow() {
@@ -1025,8 +1042,9 @@ ha-card.ups {
   cursor: pointer;
   min-width: 0;
 }
-.stat-label { font-size: .9rem; color: var(--u-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-label { font-size: .9rem; color: var(--u-muted); line-height: 1.2; }
 .stat-value { font-size: 1.55rem; font-weight: 700; color: var(--u-ink); margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-value.long { font-size: 1.2rem; white-space: normal; line-height: 1.2; }
 .stat-hint { font-size: .8rem; color: var(--u-muted); }
 
 /* --- history --- */
