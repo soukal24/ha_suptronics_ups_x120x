@@ -82,8 +82,10 @@ const STRINGS = {
     voltage: "Voltage",
     never: "never",
     unknown: "--",
-    battery_history: "Battery",
-    mains_history: "Mains",
+    battery_history: "Battery level, last {hours} h",
+    mains_ok_legend: "mains on",
+    mains_off_legend: "outage",
+    history_collecting: "history is being collected",
     now: "now",
     hours_ago: "-{hours} h",
     window: "Window {min}-{max} %",
@@ -113,8 +115,10 @@ const STRINGS = {
     voltage: "Napětí",
     never: "zatím žádný",
     unknown: "--",
-    battery_history: "Baterie",
-    mains_history: "Síť",
+    battery_history: "Baterie za posledních {hours} h",
+    mains_ok_legend: "síť",
+    mains_off_legend: "výpadek",
+    history_collecting: "historie se teprve sbírá",
     now: "teď",
     hours_ago: "-{hours} h",
     window: "Okno {min}–{max} %",
@@ -532,8 +536,11 @@ class SuptronicsUpsCard extends HTMLElement {
     this._el.onBatteryLabel.textContent = this._t("on_battery");
     this._el.voltageLabel.textContent = this._t("voltage");
     this._el.outagesLabel.textContent = this._t("outages");
-    this._el.historyBattery.textContent = this._t("battery_history");
-    this._el.historyMains.textContent = this._t("mains_history");
+    this._el.historyBattery.textContent = this._t("battery_history", {
+      hours: Number(this._config.hours) || DEFAULT_HISTORY_HOURS,
+    });
+    this._el.legendOn.textContent = this._t("mains_ok_legend");
+    this._el.legendOff.textContent = this._t("mains_off_legend");
     this._el.axisNow.textContent = this._t("now");
     this._el.axisStart.textContent = this._t("hours_ago", {
       hours: Number(this._config.hours) || DEFAULT_HISTORY_HOURS,
@@ -620,8 +627,11 @@ class SuptronicsUpsCard extends HTMLElement {
         ? this._displayState(statusState)
         : this._t(`status_${statusKey}`);
     }
+    // toggleAttribute, not `.hidden`: `hidden` is a property of HTMLElement
+    // only, so assigning it to an <svg> creates an inert JS property and
+    // every glyph stays on screen.
     for (const node of this._el.banner.querySelectorAll(".glyph")) {
-      node.hidden = node.dataset.for !== statusKey;
+      node.toggleAttribute("hidden", node.dataset.for !== statusKey);
     }
     this.classList.toggle("is-charging", charging);
     this.classList.toggle("is-alert", statusKey === "low_battery" || statusKey === "shutting_down");
@@ -751,6 +761,10 @@ class SuptronicsUpsCard extends HTMLElement {
 
     const series = this._batteryTrace || [];
     const known = series.filter((v) => v !== null);
+    // Freshly installed: a trace covering a small part of the window reads as
+    // a glitch, so say what is going on instead.
+    this._el.historyNote.hidden = !(this._batteryTrace && known.length < series.length / 10);
+    this._el.historyNote.textContent = this._t("history_collecting");
     if (known.length < 2) {
       line.setAttribute("points", "");
       area.setAttribute("d", "");
@@ -835,8 +849,12 @@ const TEMPLATE = `
 <div class="history" data-ref="history">
   <div class="history-head">
     <span class="legend legend-battery" data-ref="historyBattery"></span>
-    <span class="legend legend-mains" data-ref="historyMains"></span>
+    <span class="legend-group">
+      <span class="legend legend-on" data-ref="legendOn"></span>
+      <span class="legend legend-off" data-ref="legendOff"></span>
+    </span>
   </div>
+  <div class="history-note" data-ref="historyNote" hidden></div>
   <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
     <path class="spark-area" data-ref="sparkArea" d=""/>
     <polyline data-ref="spark" points=""/>
@@ -885,7 +903,7 @@ const STYLES = `
 ha-card.ups {
   display: block;
   overflow: hidden;
-  padding: 0 16px 14px;
+  padding: 0 18px 16px;
   border-top: 4px solid var(--u-color);
   transition: border-color 400ms ease;
 }
@@ -893,39 +911,40 @@ ha-card.ups {
 /* --- banner --- */
 .banner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 12px 0 10px;
+  gap: 10px 14px;
+  padding: 14px 0 12px;
   border-bottom: 1px solid var(--u-line);
   cursor: pointer;
 }
 .banner .glyph {
   flex: none;
-  width: 32px; height: 32px;
-  padding: 6px;
-  border-radius: 10px;
+  width: 40px; height: 40px;
+  padding: 8px;
+  border-radius: 12px;
   fill: #fff;
   background: var(--u-color);
   transition: background 400ms ease;
 }
 .banner .glyph[hidden] { display: none; }
 :host(.is-alert) .banner .glyph { animation: blink 1.4s ease-in-out infinite; }
-.banner-text { min-width: 0; flex: 1; }
+.banner-text { min-width: 0; flex: 1 1 150px; }
 .title {
-  font-size: .8rem;
+  font-size: .9rem;
   color: var(--u-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .status {
-  font-size: 1.15rem;
+  font-size: 1.4rem;
   font-weight: 600;
   color: var(--u-ink);
   line-height: 1.2;
 }
 .window-text {
   flex: none;
-  font-size: .72rem;
-  padding: 4px 9px;
+  font-size: .82rem;
+  padding: 5px 11px;
   border-radius: 6px;
   border: 1px solid var(--u-line);
   color: var(--u-muted);
@@ -935,16 +954,16 @@ ha-card.ups {
 /* --- main --- */
 .main {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 14px;
-  align-items: center;
-  padding-top: 8px;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  align-items: stretch;
+  padding-top: 10px;
 }
 @container (max-width: 440px) {
   .main { grid-template-columns: 1fr; }
 }
 
-.dial { position: relative; width: 200px; max-width: 100%; margin: 0 auto; cursor: pointer; }
+.dial { position: relative; width: 220px; max-width: 100%; margin: 0 auto; cursor: pointer; align-self: center; }
 .dial > svg { width: 100%; display: block; overflow: visible; }
 .dial-track { fill: none; stroke: var(--u-tile); stroke-width: 14; stroke-linecap: round; }
 .dial-value {
@@ -971,7 +990,7 @@ ha-card.ups {
   pointer-events: none;
 }
 .percent {
-  font-size: 2.6rem;
+  font-size: 3rem;
   font-weight: 700;
   line-height: 1;
   color: var(--u-ink);
@@ -980,10 +999,8 @@ ha-card.ups {
 }
 .percent i { font-size: 1rem; font-style: normal; color: var(--u-muted); margin-left: 2px; }
 .level {
-  margin-top: 4px;
-  font-size: .7rem;
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  margin-top: 6px;
+  font-size: .82rem;
   font-weight: 600;
   color: var(--u-band, var(--u-muted));
 }
@@ -992,36 +1009,44 @@ ha-card.ups {
 .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-auto-rows: 1fr;
+  gap: 10px;
   min-width: 0;
 }
 .stats[hidden] { display: none; }
 .stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: var(--u-tile);
-  border-radius: 10px;
-  padding: 9px 11px;
+  border-radius: 12px;
+  padding: 12px 14px;
   cursor: pointer;
   min-width: 0;
 }
-.stat-label { font-size: .7rem; color: var(--u-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stat-value { font-size: 1.05rem; font-weight: 600; color: var(--u-ink); margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.stat-hint { font-size: .66rem; color: var(--u-muted); }
+.stat-label { font-size: .82rem; color: var(--u-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-value { font-size: 1.4rem; font-weight: 600; color: var(--u-ink); margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-hint { font-size: .74rem; color: var(--u-muted); }
 
 /* --- history --- */
-.history { margin-top: 12px; }
+.history { margin-top: 16px; }
 .history[hidden] { display: none; }
-.history-head { display: flex; gap: 12px; font-size: .68rem; color: var(--u-muted); margin-bottom: 4px; }
+.history-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; font-size: .78rem; color: var(--u-muted); margin-bottom: 6px; }
+.legend-group { display: inline-flex; gap: 10px; }
 .legend::before {
   content: "";
   display: inline-block;
-  width: 10px; height: 4px;
+  width: 12px; height: 5px;
   border-radius: 2px;
-  margin-right: 5px;
+  margin-right: 6px;
   vertical-align: middle;
 }
 .legend-battery::before { background: var(--u-accent); }
-.legend-mains::before { background: var(--u-good); }
-.spark { width: 100%; height: 44px; display: block; }
+.legend-on::before { background: var(--u-good); }
+.legend-off::before { background: var(--u-bad); }
+.history-note { font-size: .78rem; color: var(--u-muted); margin: 2px 0 4px; font-style: italic; }
+.history-note[hidden] { display: none; }
+.spark { width: 100%; height: 56px; display: block; }
 .spark polyline {
   fill: none;
   stroke: var(--u-accent);
@@ -1030,19 +1055,19 @@ ha-card.ups {
   vector-effect: non-scaling-stroke;
 }
 .spark-area { fill: var(--u-accent); opacity: .12; }
-.strip { width: 100%; height: 6px; display: block; margin-top: 3px; border-radius: 3px; overflow: hidden; }
+.strip { width: 100%; height: 8px; display: block; margin-top: 4px; border-radius: 4px; overflow: hidden; }
 .strip-bg { fill: var(--u-tile); }
 .strip rect.on { fill: var(--u-good); }
 .strip rect.off { fill: var(--u-bad); }
-.axis { display: flex; justify-content: space-between; font-size: .64rem; color: var(--u-muted); margin-top: 3px; }
+.axis { display: flex; justify-content: space-between; font-size: .74rem; color: var(--u-muted); margin-top: 4px; }
 
 /* --- extras --- */
 .extras {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-  gap: 6px;
-  margin-top: 12px;
-  padding-top: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--u-line);
 }
 .extras[hidden] { display: none; }
@@ -1051,18 +1076,18 @@ ha-card.ups {
 .mini[data-color="warn"] { --m-color: var(--u-warn); }
 .mini[data-color="bad"] { --m-color: var(--u-bad); }
 .mini[data-color="muted"] { --m-color: var(--u-muted); }
-.mini svg { width: 64px; height: 64px; display: block; margin: 0 auto; }
+.mini svg { width: 76px; height: 76px; display: block; margin: 0 auto; }
 .mini-track { fill: none; stroke: var(--u-tile); stroke-width: 6; stroke-linecap: round; }
 .mini-value { fill: none; stroke: var(--m-color); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 700ms ease, stroke 400ms ease; }
 .mini-value-text {
-  position: absolute; left: 0; right: 0; top: 24px;
-  font-size: .78rem; font-weight: 600; color: var(--u-ink);
+  position: absolute; left: 0; right: 0; top: 29px;
+  font-size: .9rem; font-weight: 600; color: var(--u-ink);
   font-variant-numeric: tabular-nums;
 }
-.mini-name { font-size: .64rem; color: var(--u-muted); margin-top: -6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-name { font-size: .78rem; color: var(--u-muted); margin-top: -8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* --- actions --- */
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .actions[hidden] { display: none; }
 .toggle {
   appearance: none;
@@ -1070,10 +1095,10 @@ ha-card.ups {
   border: 1px solid var(--u-line);
   background: transparent;
   color: var(--u-muted);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 10px;
+  padding: 10px 14px;
   font: inherit;
-  font-size: .78rem;
+  font-size: .9rem;
   cursor: pointer;
   transition: color 250ms ease, border-color 250ms ease, background 250ms ease;
 }
@@ -1086,11 +1111,12 @@ ha-card.ups {
 .toggle:hover { filter: brightness(1.15); }
 
 /* --- variants --- */
-[data-variant="compact"] .main { grid-template-columns: 150px 1fr; }
-[data-variant="compact"] .dial { width: 150px; }
-[data-variant="compact"] .percent { font-size: 2rem; }
+[data-variant="compact"] .main { grid-template-columns: 170px 1fr; }
+[data-variant="compact"] .dial { width: 170px; }
+[data-variant="compact"] .percent { font-size: 2.3rem; }
+[data-variant="compact"] .stat-value { font-size: 1.2rem; }
 [data-variant="gauge"] .main { grid-template-columns: 1fr; }
-[data-variant="gauge"] .dial { width: 220px; }
+[data-variant="gauge"] .dial { width: 240px; }
 
 .empty { padding: 14px 4px; color: var(--u-muted); }
 .empty-title { font-size: 1.05rem; font-weight: 600; color: var(--u-ink); margin-bottom: 6px; }
