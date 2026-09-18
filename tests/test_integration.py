@@ -78,6 +78,23 @@ async def test_new_entities_and_roles(hass: HomeAssistant, fake_hardware) -> Non
     } <= roles
 
 
+async def test_all_entity_ids_are_fixed(hass: HomeAssistant, fake_hardware) -> None:
+    """Every entity id is language independent: <domain>.ups_<key>."""
+    await _setup(hass)
+    ours = [
+        state.entity_id
+        for state in hass.states.async_all()
+        if state.attributes.get("ups_role")
+    ]
+    assert len(ours) == 20  # 10 sensors, 4 binary sensors, 2 switches, 4 numbers
+    for entity_id in ours:
+        assert entity_id.split(".", 1)[1].startswith("ups_"), entity_id
+    assert "number.ups_charge_limit_max" in ours
+    assert "number.ups_shutdown_after_minutes" in ours
+    assert "switch.ups_auto_shutdown" in ours
+    assert "sensor.ups_last_power_restored" in ours
+
+
 async def test_charge_window_hysteresis(hass: HomeAssistant, fake_hardware) -> None:
     """Charging stops at the upper limit and resumes only at the lower one."""
     entry = await _setup(hass)
@@ -123,7 +140,7 @@ async def test_charging_switch_is_master(hass: HomeAssistant, fake_hardware) -> 
     fake_hardware.charging_allowed = True
     await _poll(hass, entry)
     assert fake_hardware.charging_allowed is False
-    assert hass.states.get("binary_sensor.suptronics_x120x_charging").state == "off"
+    assert hass.states.get("binary_sensor.ups_battery_charging").state == "off"
 
 
 async def test_settings_survive_reload(hass: HomeAssistant, fake_hardware) -> None:
@@ -155,27 +172,27 @@ async def test_power_loss_status_and_outage_count(hass: HomeAssistant, fake_hard
     fake_hardware.capacity = 50.0
     await _poll(hass, entry)
 
-    assert hass.states.get("sensor.suptronics_x120x_status").state == "on_battery"
+    assert hass.states.get("sensor.ups_status").state == "on_battery"
     assert hass.states.get("binary_sensor.ups_power").state == "on"
-    assert hass.states.get("binary_sensor.suptronics_x120x_ac_power").state == "off"
-    assert hass.states.get("sensor.suptronics_x120x_power_outages").state == "1"
-    assert hass.states.get("sensor.suptronics_x120x_last_power_loss").state != "unknown"
+    assert hass.states.get("binary_sensor.ups_ac_power").state == "off"
+    assert hass.states.get("sensor.ups_power_outages").state == "1"
+    assert hass.states.get("sensor.ups_last_power_loss").state != "unknown"
 
     fake_hardware.capacity = 10.0
     await _poll(hass, entry)
-    assert hass.states.get("sensor.suptronics_x120x_status").state == "low_battery"
+    assert hass.states.get("sensor.ups_status").state == "low_battery"
 
     fake_hardware.ac_present = True
     await _poll(hass, entry)
-    assert hass.states.get("sensor.suptronics_x120x_status").state == "charging"
-    assert hass.states.get("sensor.suptronics_x120x_power_outages").state == "1"
+    assert hass.states.get("sensor.ups_status").state == "charging"
+    assert hass.states.get("sensor.ups_power_outages").state == "1"
 
 
 async def test_runtime_estimate_learns_rate(hass: HomeAssistant, fake_hardware) -> None:
     """After a measured discharge the runtime is estimated, even back on mains."""
     entry = await _setup(hass)
     coordinator = entry.runtime_data
-    assert hass.states.get("sensor.suptronics_x120x_estimated_runtime").state == "unknown"
+    assert hass.states.get("sensor.ups_runtime_estimate").state == "unknown"
 
     fake_hardware.ac_present = False
     fake_hardware.capacity = 80.0
@@ -185,14 +202,14 @@ async def test_runtime_estimate_learns_rate(hass: HomeAssistant, fake_hardware) 
     coordinator._on_battery_since -= 600
     fake_hardware.capacity = 70.0
     await _poll(hass, entry)
-    runtime = float(hass.states.get("sensor.suptronics_x120x_estimated_runtime").state)
+    runtime = float(hass.states.get("sensor.ups_runtime_estimate").state)
     assert 65 <= runtime <= 75  # 70% / 60%/h = 70 min
 
     fake_hardware.ac_present = True
     await _poll(hass, entry)
     assert coordinator.learned_rate is not None
     assert 55 <= coordinator.learned_rate <= 65
-    assert hass.states.get("sensor.suptronics_x120x_estimated_runtime").state != "unknown"
+    assert hass.states.get("sensor.ups_runtime_estimate").state != "unknown"
 
 
 async def test_shutdown_on_low_battery(hass: HomeAssistant, fake_hardware) -> None:
@@ -215,15 +232,15 @@ async def test_shutdown_on_low_battery(hass: HomeAssistant, fake_hardware) -> No
     fake_hardware.ac_present = False
     fake_hardware.capacity = 15.0
     await _poll(hass, entry)
-    assert hass.states.get("sensor.suptronics_x120x_status").state == "shutting_down"
-    countdown = hass.states.get("sensor.suptronics_x120x_shutdown_countdown")
+    assert hass.states.get("sensor.ups_status").state == "shutting_down"
+    countdown = hass.states.get("sensor.ups_shutdown_countdown")
     assert 0 < float(countdown.state) <= SHUTDOWN_CONFIRM_SECONDS
     assert not calls
 
     # Mains back for one sample: cancelled.
     fake_hardware.ac_present = True
     await _poll(hass, entry)
-    assert hass.states.get("sensor.suptronics_x120x_status").state == "charging"
+    assert hass.states.get("sensor.ups_status").state == "charging"
     assert coordinator._shutdown_armed_at is None
 
     # Gone again, and a minute passes.

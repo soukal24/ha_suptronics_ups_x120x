@@ -43,6 +43,10 @@ keys, so an update carries history, automations and settings over.
 - Tests (`tests/`, pytest-homeassistant-custom-component).
 
 ### Changed
+- **Fixed entity ids for everything**: every entity gets `<domain>.ups_<key>`
+  (e.g. `sensor.ups_status`, `number.ups_charge_limit_max`) regardless of
+  the Home Assistant language, so dashboards and automations are portable
+  between installs. The four 2.x ids are unchanged.
 - One coordinator owns the hardware for the whole life of the entry. The
   charge pin is held open and its state re-applied on every poll, which fixes
   the switch "turning itself back on" reported on 2.x: previously the line was

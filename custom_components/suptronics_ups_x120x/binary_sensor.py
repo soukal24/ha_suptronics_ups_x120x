@@ -67,6 +67,7 @@ class UpsBinarySensor(UpsEntity, BinarySensorEntity):
     """A boolean state derived from the UPS."""
 
     entity_description: UpsBinarySensorDescription
+    _entity_domain = "binary_sensor"
 
     def __init__(
         self, coordinator: UpsCoordinator, description: UpsBinarySensorDescription
@@ -87,6 +88,8 @@ class UpsPowerLossSensor(UpsEntity, BinarySensorEntity):
     2.x: by default it is a "problem" that is on while mains power is gone.
     With invert logic off it is on while mains power is present instead.
     """
+
+    _entity_domain = "binary_sensor"
 
     def __init__(self, coordinator: UpsCoordinator) -> None:
         super().__init__(

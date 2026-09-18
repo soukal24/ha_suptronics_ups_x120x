@@ -94,6 +94,7 @@ class UpsNumber(UpsEntity, NumberEntity):
     """A setting kept by the coordinator and persisted across restarts."""
 
     entity_description: UpsNumberDescription
+    _entity_domain = "number"
 
     def __init__(self, coordinator: UpsCoordinator, description: UpsNumberDescription) -> None:
         super().__init__(coordinator, description.key)

@@ -123,6 +123,7 @@ class UpsSensor(UpsEntity, SensorEntity):
     """A value read from, or derived from, the UPS."""
 
     entity_description: UpsSensorDescription
+    _entity_domain = "sensor"
 
     def __init__(self, coordinator: UpsCoordinator, description: UpsSensorDescription) -> None:
         super().__init__(

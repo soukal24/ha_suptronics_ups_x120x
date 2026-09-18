@@ -57,6 +57,7 @@ class UpsChargingSwitch(UpsEntity, SwitchEntity):
     """
 
     entity_description = CHARGING_SWITCH
+    _entity_domain = "switch"
 
     def __init__(self, coordinator: UpsCoordinator) -> None:
         super().__init__(
@@ -96,6 +97,7 @@ class UpsShutdownSwitch(UpsEntity, SwitchEntity):
     """
 
     entity_description = SHUTDOWN_SWITCH
+    _entity_domain = "switch"
 
     def __init__(self, coordinator: UpsCoordinator) -> None:
         super().__init__(coordinator, SHUTDOWN_SWITCH.key)

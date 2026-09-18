@@ -19,6 +19,8 @@ class UpsEntity(CoordinatorEntity[UpsCoordinator]):
     """Common device info, naming and availability for every UPS entity."""
 
     _attr_has_entity_name = True
+    # Set by each platform ("sensor", "switch", ...), used to force the id.
+    _entity_domain: str = "sensor"
 
     def __init__(
         self,
@@ -33,8 +35,14 @@ class UpsEntity(CoordinatorEntity[UpsCoordinator]):
         # Entities that existed before 3.0 keep their unique_id and their
         # entity_id, so history and automations carry over untouched.
         self._attr_unique_id = legacy_unique_id or f"{DOMAIN}_{key}"
-        if legacy_entity_id:
-            self.entity_id = legacy_entity_id
+        # Every entity gets a fixed, language-independent entity_id
+        # (sensor.ups_status, number.ups_charge_limit_max, ...). Left to Home
+        # Assistant, the id would be built from the translated name, so a
+        # Czech install would get sensor.suptronics_x120x_stav and every
+        # dashboard or automation would have to be adjusted per language.
+        self.entity_id = (
+            legacy_entity_id or f"{self._entity_domain}.ups_{key.removeprefix('ups_')}"
+        )
         self._attr_translation_key = key
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, DEVICE_ID)})
 

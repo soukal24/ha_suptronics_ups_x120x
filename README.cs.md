@@ -12,26 +12,32 @@ si zachovaly svá ID, takže stávající automatizace a historie fungují dál.
 
 Jedno **zařízení** *Suptronics X120x* s těmito entitami:
 
-| Entita | Typ | Poznámka |
+ID všech entit jsou pevně dané integrací a stejné na každé instalaci bez
+ohledu na jazyk Home Assistanta, takže dashboardy a automatizace jde
+kopírovat mezi systémy.
+
+| Entita | ID entity | Poznámka |
 |---|---|---|
-| Baterie (`sensor.ups_battery_level`) | senzor | procenta z měřiče baterie |
-| Napětí baterie (`sensor.ups_battery_voltage`) | senzor | volty |
-| Výpadek napájení (`binary_sensor.ups_power`) | binární senzor | senzor z verze 2: zapnutý při výpadku sítě (lze změnit) |
-| Nabíjení baterie (`switch.ups_charging_on_off`) | přepínač | hlavní vypínač nabíjení |
-| Stav | senzor (výčet) | Na síti, Nabíjí se, Na baterii, Slabá baterie, Vypíná se |
-| Úroveň baterie | senzor (výčet) | Plná / Vysoká / Střední / Nízká / Kritická |
-| Síťové napájení | binární senzor | síť je připojená |
-| Nabíjení | binární senzor | baterie se právě nabíjí |
-| Slabá baterie | binární senzor | pod nastaveným prahem |
-| Odhadovaná výdrž | senzor | minuty na baterii, naučené ze skutečných výpadků |
-| Doba na baterii | senzor | minuty od výpadku sítě |
-| Poslední výpadek / Poslední obnovení napájení | senzor | časové značky |
-| Počet výpadků | senzor | počítadlo |
-| Nabíjet pod / Nabíjet do | číslo | okno nabíjení |
-| Vypnout při slabé baterii | přepínač | automatické čisté vypnutí, výchozí vypnuto |
-| Vypnout pod | číslo | úroveň baterie pro vypnutí |
-| Vypnout po minutách na baterii | číslo | časové pravidlo pro vypnutí, 0 = vypnuto |
-| Odpočet do vypnutí | senzor | sekundy do vypnutí, když se blíží |
+| Baterie | `sensor.ups_battery_level` | procenta z měřiče baterie (z verze 2) |
+| Napětí baterie | `sensor.ups_battery_voltage` | volty (z verze 2) |
+| Výpadek napájení | `binary_sensor.ups_power` | senzor z verze 2: zapnutý při výpadku sítě (lze změnit) |
+| Nabíjení baterie | `switch.ups_charging_on_off` | hlavní vypínač nabíjení (z verze 2) |
+| Stav | `sensor.ups_status` | Na síti, Nabíjí se, Na baterii, Slabá baterie, Vypíná se |
+| Úroveň baterie | `sensor.ups_battery_state` | Plná / Vysoká / Střední / Nízká / Kritická |
+| Síťové napájení | `binary_sensor.ups_ac_power` | síť je připojená |
+| Nabíjení | `binary_sensor.ups_battery_charging` | baterie se právě nabíjí |
+| Slabá baterie | `binary_sensor.ups_battery_low` | pod nastaveným prahem |
+| Odhadovaná výdrž | `sensor.ups_runtime_estimate` | minuty na baterii, naučené ze skutečných výpadků |
+| Doba na baterii | `sensor.ups_time_on_battery` | minuty od výpadku sítě |
+| Poslední výpadek | `sensor.ups_last_power_loss` | časová značka |
+| Poslední obnovení napájení | `sensor.ups_last_power_restored` | časová značka |
+| Počet výpadků | `sensor.ups_power_outages` | počítadlo |
+| Nabíjet pod | `number.ups_charge_limit_min` | dolní mez okna nabíjení |
+| Nabíjet do | `number.ups_charge_limit_max` | horní mez okna nabíjení |
+| Vypnout při slabé baterii | `switch.ups_auto_shutdown` | automatické čisté vypnutí, výchozí vypnuto |
+| Vypnout pod | `number.ups_shutdown_below` | úroveň baterie pro vypnutí |
+| Vypnout po minutách na baterii | `number.ups_shutdown_after_minutes` | časové pravidlo pro vypnutí, 0 = vypnuto |
+| Odpočet do vypnutí | `sensor.ups_shutdown_countdown` | sekundy do vypnutí, když se blíží |
 
 ### Okno nabíjení
 

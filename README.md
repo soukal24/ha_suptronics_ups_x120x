@@ -15,26 +15,32 @@ over.
 
 One **device**, *Suptronics X120x*, with these entities:
 
-| Entity | Type | Notes |
+Every entity id is fixed by the integration and identical on every install,
+whatever language Home Assistant runs in, so dashboards and automations can
+be copied between systems.
+
+| Entity | Entity id | Notes |
 |---|---|---|
-| Battery (`sensor.ups_battery_level`) | sensor | percent, from the fuel gauge |
-| Battery voltage (`sensor.ups_battery_voltage`) | sensor | volts |
-| Power loss (`binary_sensor.ups_power`) | binary sensor | the 2.x sensor: on while mains power is lost (configurable) |
-| Battery charging (`switch.ups_charging_on_off`) | switch | master switch for charging |
-| Status | sensor (enum) | `online`, `charging`, `on_battery`, `low_battery`, `shutting_down` |
-| Battery level | sensor (enum) | full / high / medium / low / critical |
-| AC power | binary sensor | mains present |
-| Charging | binary sensor | the pack is actually being charged |
-| Battery low | binary sensor | below the configurable threshold |
-| Estimated runtime | sensor | minutes left on battery, learned from real outages |
-| Time on battery | sensor | minutes since mains was lost |
-| Last power loss / Last power restored | sensor | timestamps |
-| Power outages | sensor | counter |
-| Charge below / Charge up to | number | the charge window |
-| Shutdown on low battery | switch | automatic clean shutdown, off by default |
-| Shut down below | number | battery level for the shutdown |
-| Shut down after minutes on battery | number | time rule for the shutdown, 0 = off |
-| Shutdown countdown | sensor | seconds until the shutdown, while one is pending |
+| Battery | `sensor.ups_battery_level` | percent, from the fuel gauge (kept from 2.x) |
+| Battery voltage | `sensor.ups_battery_voltage` | volts (kept from 2.x) |
+| Power loss | `binary_sensor.ups_power` | the 2.x sensor: on while mains power is lost (configurable) |
+| Battery charging | `switch.ups_charging_on_off` | master switch for charging (kept from 2.x) |
+| Status | `sensor.ups_status` | `online`, `charging`, `on_battery`, `low_battery`, `shutting_down` |
+| Battery level | `sensor.ups_battery_state` | full / high / medium / low / critical |
+| AC power | `binary_sensor.ups_ac_power` | mains present |
+| Charging | `binary_sensor.ups_battery_charging` | the pack is actually being charged |
+| Battery low | `binary_sensor.ups_battery_low` | below the configurable threshold |
+| Estimated runtime | `sensor.ups_runtime_estimate` | minutes left on battery, learned from real outages |
+| Time on battery | `sensor.ups_time_on_battery` | minutes since mains was lost |
+| Last power loss | `sensor.ups_last_power_loss` | timestamp |
+| Last power restored | `sensor.ups_last_power_restored` | timestamp |
+| Power outages | `sensor.ups_power_outages` | counter |
+| Charge below | `number.ups_charge_limit_min` | lower end of the charge window |
+| Charge up to | `number.ups_charge_limit_max` | upper end of the charge window |
+| Shutdown on low battery | `switch.ups_auto_shutdown` | automatic clean shutdown, off by default |
+| Shut down below | `number.ups_shutdown_below` | battery level for the shutdown |
+| Shut down after minutes on battery | `number.ups_shutdown_after_minutes` | time rule for the shutdown, 0 = off |
+| Shutdown countdown | `sensor.ups_shutdown_countdown` | seconds until the shutdown, while one is pending |
 
 ### The charge window
 
