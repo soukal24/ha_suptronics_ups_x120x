@@ -2,23 +2,26 @@
  * Suptronics UPS card.
  *
  * A self-contained Lovelace card for the Suptronics X120x UPS, served and
- * registered by the integration itself, so no dashboard resource has to be
- * added by hand.
- *
- * Derived from the X120X UPS card by mesgas (MIT), see THIRD_PARTY_NOTICES.md.
- *
- * Configuration is optional: with nothing given the card finds the UPS and
- * recognises each entity by the `ups_role` attribute the integration puts on
- * it, so renames and other languages do not matter.
+ * registered by the integration itself. It finds the UPS entities on its own
+ * through the `ups_role` attribute the integration puts on each of them.
  *
  *   type: custom:suptronics-ups-card
- *   variant: full | compact | slim | gauge   (default: full)
+ *   variant: full | compact | gauge      (default: full)
  *   name: optional title override
- *   hours: how far back the sparkline looks (default 24)
- *   language: en | cs (default: the language Home Assistant is set to)
- *   show_flow / show_sparkline / show_chips / show_button:
+ *   hours: how far back the history looks (default 24)
+ *   language: en | cs                     (default: the Home Assistant language)
+ *   show_stats / show_history / show_extras / show_actions:
  *       force a single block on or off, whatever the variant decided
- *   entities: optional explicit overrides, keyed by the roles below
+ *   extras:                               optional mini gauges for any entity
+ *     - entity: sensor.processor_temperature
+ *       name: CPU
+ *       min: 0
+ *       max: 100
+ *       severity: { green: 0, yellow: 65, red: 80 }
+ *   entities:                             optional explicit overrides by role
+ *
+ * The resource-registration approach and the entity lookup follow the X120X
+ * card by mesgas (MIT), see THIRD_PARTY_NOTICES.md.
  */
 
 const CARD_VERSION = "3.0.0";
@@ -27,40 +30,13 @@ const CARD_TYPE = "suptronics-ups-card";
 
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-/** Count a number element up or down to its new value. */
-function tweenNumber(element, to, format, duration = 650) {
-  const previous = Number(element.dataset.value);
-  element.dataset.value = String(to);
-
-  if (element._tween) {
-    cancelAnimationFrame(element._tween);
-    element._tween = null;
-  }
-  if (REDUCED_MOTION.matches || !Number.isFinite(previous) || previous === to) {
-    element.textContent = format(to);
-    return;
-  }
-
-  const start = performance.now();
-  const step = (now) => {
-    const progress = Math.min(1, (now - start) / duration);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    element.textContent = format(previous + (to - previous) * eased);
-    element._tween = progress < 1 ? requestAnimationFrame(step) : null;
-  };
-  element._tween = requestAnimationFrame(step);
-}
-
 console.info(
   `%c SUPTRONICS-UPS-CARD %c ${CARD_VERSION} `,
-  "color:#0b1020;background:#4fd1c5;font-weight:700;border-radius:3px 0 0 3px",
-  "color:#4fd1c5;background:#0b1020;border-radius:0 3px 3px 0"
+  "color:#fff;background:#2e7d32;font-weight:700;border-radius:3px 0 0 3px",
+  "color:#2e7d32;background:#e8f5e9;border-radius:0 3px 3px 0"
 );
 
-/**
- * The role of every entity is the `ups_role` attribute the integration sets,
- * which is the entity's translation key. These are the ones the card uses.
- */
+/** The role attribute value of each entity the card uses. */
 const ROLES = {
   status: "ups_status",
   level: "battery_state",
@@ -72,23 +48,22 @@ const ROLES = {
   charge_switch: "charging",
   runtime: "runtime_estimate",
   on_battery: "time_on_battery",
+  last_loss: "last_power_loss",
+  outages: "power_outages",
   countdown: "shutdown_countdown",
   shutdown_switch: "auto_shutdown",
 };
 
-const STATUS_THEME = {
-  online: { tint: "#3ddc97" },
-  charging: { tint: "#4fd1c5" },
-  on_battery: { tint: "#f6c445" },
-  low_battery: { tint: "#ff5c5c" },
-  shutting_down: { tint: "#ff5c5c" },
-  unknown: { tint: "#8a94a6" },
+/** Which theme colour each status uses. */
+const STATUS_COLOR = {
+  online: "good",
+  charging: "info",
+  on_battery: "warn",
+  low_battery: "bad",
+  shutting_down: "bad",
+  unknown: "muted",
 };
 
-/**
- * The card's own texts. Entity states come already translated from the
- * frontend; these are the labels the card adds around them.
- */
 const STRINGS = {
   en: {
     status_online: "On line",
@@ -98,24 +73,25 @@ const STRINGS = {
     status_shutting_down: "Shutting down",
     status_unknown: "Unknown",
     countdown: "Shutdown in {seconds} s",
-    mains: "Mains",
-    ups: "UPS",
-    pi: "Pi",
-    mains_ok: "Mains OK",
-    mains_lost: "Mains lost",
-    charging: "Charging",
-    not_charging: "Not charging",
-    discharging: "Discharging",
-    battery_low: "Battery low",
-    battery_healthy: "Battery healthy",
-    hold: "Hold {min}-{max}%",
-    runtime: "~{time} left",
-    on_battery_for: "On battery {time}",
-    auto_shutdown: "Auto shutdown on",
+    runtime: "Runtime",
+    runtime_hint: "estimated",
+    on_battery: "On battery",
+    last_loss: "Last outage",
+    outages: "Outages",
+    voltage: "Voltage",
+    never: "never",
+    unknown: "--",
+    battery_history: "Battery",
+    mains_history: "Mains",
+    now: "now",
+    hours_ago: "-{hours} h",
+    window: "Window {min}-{max} %",
+    charging_enabled: "Charging on",
+    charging_paused: "Charging paused",
+    shutdown_on: "Auto shutdown on",
+    shutdown_off: "Auto shutdown off",
     minutes_short: "min",
     hours_short: "h",
-    charging_enabled: "Charging enabled",
-    charging_paused: "Charging paused",
     empty:
       "No Suptronics UPS found yet. If the integration is set up, reload the dashboard; otherwise name the entities explicitly in the card config.",
   },
@@ -127,47 +103,83 @@ const STRINGS = {
     status_shutting_down: "Vypíná se",
     status_unknown: "Neznámý",
     countdown: "Vypnutí za {seconds} s",
-    mains: "Síť",
-    ups: "UPS",
-    pi: "Pi",
-    mains_ok: "Síť OK",
-    mains_lost: "Výpadek sítě",
-    charging: "Nabíjí se",
-    not_charging: "Nenabíjí se",
-    discharging: "Vybíjí se",
-    battery_low: "Slabá baterie",
-    battery_healthy: "Baterie v pořádku",
-    hold: "Držet {min}–{max} %",
-    runtime: "Výdrž ~{time}",
-    on_battery_for: "Na baterii {time}",
-    auto_shutdown: "Auto vypnutí zapnuto",
+    runtime: "Výdrž",
+    runtime_hint: "odhad",
+    on_battery: "Na baterii",
+    last_loss: "Poslední výpadek",
+    outages: "Výpadků",
+    voltage: "Napětí",
+    never: "zatím žádný",
+    unknown: "--",
+    battery_history: "Baterie",
+    mains_history: "Síť",
+    now: "teď",
+    hours_ago: "-{hours} h",
+    window: "Okno {min}–{max} %",
+    charging_enabled: "Nabíjení zapnuto",
+    charging_paused: "Nabíjení pozastaveno",
+    shutdown_on: "Auto vypnutí zapnuto",
+    shutdown_off: "Auto vypnutí vypnuto",
     minutes_short: "min",
     hours_short: "h",
-    charging_enabled: "Nabíjení povoleno",
-    charging_paused: "Nabíjení pozastaveno",
     empty:
       "Zařízení Suptronics UPS zatím nebylo nalezeno. Pokud je integrace nastavená, obnovte dashboard; jinak zadejte entity v konfiguraci karty ručně.",
   },
 };
 
-const GAUGE_RADIUS = 78;
-const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_RADIUS;
-const WINDOW_RADIUS = 92;
-const WINDOW_CIRCUMFERENCE = 2 * Math.PI * WINDOW_RADIUS;
-const HISTORY_POINTS = 48;
+const VARIANTS = {
+  full: { stats: true, history: true, extras: true, actions: true },
+  compact: { stats: true, history: false, extras: false, actions: true },
+  gauge: { stats: false, history: false, extras: false, actions: false },
+};
 
+// Main gauge: a 240-degree arc, like a dashboard dial.
+const ARC_SWEEP = 240;
+const ARC_RADIUS = 80;
+const ARC_LENGTH = (2 * Math.PI * ARC_RADIUS * ARC_SWEEP) / 360;
+// Mini gauges in the extras row.
+const MINI_RADIUS = 26;
+const MINI_LENGTH = (2 * Math.PI * MINI_RADIUS * ARC_SWEEP) / 360;
+
+const HISTORY_POINTS = 96;
 const DEFAULT_HISTORY_HOURS = 24;
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 
-const VARIANTS = {
-  full: { flow: true, sparkline: true, chips: true, button: true },
-  compact: { flow: false, sparkline: false, chips: true, button: true },
-  slim: { flow: false, sparkline: false, chips: true, button: false },
-  gauge: { flow: false, sparkline: false, chips: false, button: false },
-};
+/** Battery bands, for the colour of the main dial. */
+const BATTERY_SEVERITY = { green: 50, yellow: 25, red: 0 };
 
-const CELL_TOP = 21.5;
-const CELL_HEIGHT = 57;
+/**
+ * Colour for a value against gauge-style thresholds. Works both ways round:
+ * ascending (green 0, yellow 65, red 80: a temperature) and descending
+ * (green 3.9, yellow 3.55, red 0: a voltage).
+ */
+function severityColor(value, severity) {
+  if (!severity || !Number.isFinite(value)) return "accent";
+  const g = Number(severity.green);
+  const y = Number(severity.yellow);
+  const r = Number(severity.red);
+  if (![g, y, r].every(Number.isFinite)) return "accent";
+  if (g >= y) {
+    // Descending: high is good.
+    if (value >= g) return "good";
+    if (value >= y) return "warn";
+    return "bad";
+  }
+  if (value >= r) return "bad";
+  if (value >= y) return "warn";
+  return "good";
+}
+
+function describeArc(cx, cy, r, sweep) {
+  // The arc starts at the bottom-left (240° sweep centred on top).
+  const start = 90 + (360 - sweep) / 2;
+  const toXY = (angle) => {
+    const rad = (angle * Math.PI) / 180;
+    return `${(cx + r * Math.cos(rad)).toFixed(2)},${(cy + r * Math.sin(rad)).toFixed(2)}`;
+  };
+  const large = sweep > 180 ? 1 : 0;
+  return `M ${toXY(start)} A ${r} ${r} 0 ${large} 1 ${toXY(start + sweep)}`;
+}
 
 class SuptronicsUpsCard extends HTMLElement {
   constructor() {
@@ -175,11 +187,11 @@ class SuptronicsUpsCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._config = {};
     this._entities = null;
-    this._history = [];
-    this._recorded = null;
+    this._built = false;
     this._historyAt = 0;
     this._fetching = false;
-    this._built = false;
+    this._batteryTrace = null;
+    this._mainsTrace = null;
   }
 
   static getStubConfig() {
@@ -190,46 +202,45 @@ class SuptronicsUpsCard extends HTMLElement {
     const variant = config.variant || "full";
     if (!VARIANTS[variant]) {
       throw new Error(
-        `${CARD_TYPE}: unknown variant "${variant}". ` +
-          `Use one of: ${Object.keys(VARIANTS).join(", ")}`
+        `${CARD_TYPE}: unknown variant "${variant}". Use one of: ${Object.keys(VARIANTS).join(", ")}`
       );
     }
-    this._config = { ...config, variant };
+    const extras = Array.isArray(config.extras) ? config.extras : [];
+    for (const extra of extras) {
+      if (!extra || typeof extra.entity !== "string") {
+        throw new Error(`${CARD_TYPE}: every item of "extras" needs an "entity"`);
+      }
+    }
+    this._config = { ...config, variant, extras };
     this._entities = null;
     this._built = false;
     this.shadowRoot.innerHTML = "";
   }
 
+  getCardSize() {
+    const parts = this._parts();
+    return 3 + (parts.history ? 2 : 0) + (parts.extras && this._config.extras.length ? 2 : 0);
+  }
+
   _parts() {
-    const defaults = VARIANTS[this._config.variant];
+    const defaults = VARIANTS[this._config.variant] || VARIANTS.full;
     const resolve = (key) => {
       const override = this._config[`show_${key}`];
       return override === undefined ? defaults[key] : Boolean(override);
     };
     return {
-      flow: resolve("flow"),
-      sparkline: resolve("sparkline"),
-      chips: resolve("chips"),
-      button: resolve("button"),
+      stats: resolve("stats"),
+      history: resolve("history"),
+      extras: resolve("extras"),
+      actions: resolve("actions"),
     };
-  }
-
-  getCardSize() {
-    const parts = VARIANTS[this._config.variant] || VARIANTS.full;
-    return parts.flow ? 5 : parts.chips ? 3 : 2;
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._built) {
-      this._build();
-    }
+    if (!this._built) this._build();
     this._update();
-    if (
-      this._shown &&
-      this._shown.sparkline &&
-      Date.now() - this._historyAt > HISTORY_REFRESH_MS
-    ) {
+    if (this._shown && this._shown.history && Date.now() - this._historyAt > HISTORY_REFRESH_MS) {
       this._fetchHistory();
     }
   }
@@ -237,10 +248,9 @@ class SuptronicsUpsCard extends HTMLElement {
   /* ---------------------------------------------------------------- i18n */
 
   _language() {
-    const configured = this._config.language;
     const hass = this._hass || {};
     const raw =
-      configured || (hass.locale && hass.locale.language) || hass.language || "en";
+      this._config.language || (hass.locale && hass.locale.language) || hass.language || "en";
     const code = String(raw).toLowerCase().split(/[-_]/)[0];
     return STRINGS[code] ? code : "en";
   }
@@ -254,7 +264,6 @@ class SuptronicsUpsCard extends HTMLElement {
     return text;
   }
 
-  /** "45 min" or "2 h 10 min", from minutes. */
   _duration(minutes) {
     const total = Math.max(0, Math.round(minutes));
     const h = Math.floor(total / 60);
@@ -264,53 +273,77 @@ class SuptronicsUpsCard extends HTMLElement {
     return `${h} ${this._t("hours_short")} ${m} ${this._t("minutes_short")}`;
   }
 
+  _relativeTime(iso) {
+    const stamp = Date.parse(iso);
+    if (!Number.isFinite(stamp)) return this._t("never");
+    const minutes = Math.round((Date.now() - stamp) / 60000);
+    if (minutes < 1) return this._t("now");
+    if (minutes < 24 * 60) return `-${this._duration(minutes)}`;
+    const date = new Date(stamp);
+    try {
+      return date.toLocaleDateString(this._hass.locale?.language || undefined, {
+        day: "numeric",
+        month: "numeric",
+      });
+    } catch (err) {
+      return date.toLocaleDateString();
+    }
+  }
+
   /* ------------------------------------------------------------- history */
 
   async _fetchHistory() {
-    const entityId = this._entities && this._entities.capacity;
-    if (this._fetching || !this._hass || !entityId) return;
+    const capacityId = this._entities && this._entities.capacity;
+    const acId = this._entities && this._entities.ac;
+    if (this._fetching || !this._hass || !capacityId) return;
     this._fetching = true;
     this._historyAt = Date.now();
     try {
       const hours = Number(this._config.hours) || DEFAULT_HISTORY_HOURS;
       const end = new Date();
       const start = new Date(end.getTime() - hours * 3600 * 1000);
+      const ids = acId ? [capacityId, acId] : [capacityId];
       const response = await this._hass.callWS({
         type: "history/history_during_period",
         start_time: start.toISOString(),
         end_time: end.toISOString(),
-        entity_ids: [entityId],
+        entity_ids: ids,
         minimal_response: true,
         no_attributes: true,
       });
-      this._recorded = this._bucket(
-        response?.[entityId] || [],
+      this._batteryTrace = this._bucketNumeric(
+        response?.[capacityId] || [],
         start.getTime(),
         end.getTime()
       );
-      if (this._built) this._drawSparkline();
+      this._mainsTrace = acId
+        ? this._segmentsBinary(response?.[acId] || [], start.getTime(), end.getTime())
+        : null;
+      if (this._built) this._drawHistory();
     } catch (err) {
       console.warn(`${CARD_TYPE}: could not read history`, err);
-      this._recorded = null;
+      this._batteryTrace = null;
+      this._mainsTrace = null;
     } finally {
       this._fetching = false;
     }
   }
 
-  _bucket(raw, startMs, endMs) {
+  _stampOf(entry) {
+    const seconds = entry.lu ?? entry.lc;
+    return typeof seconds === "number"
+      ? seconds * 1000
+      : Date.parse(entry.last_updated ?? entry.last_changed);
+  }
+
+  _bucketNumeric(raw, startMs, endMs) {
     const span = Math.max(endMs - startMs, 1);
     const sums = new Array(HISTORY_POINTS).fill(0);
     const counts = new Array(HISTORY_POINTS).fill(0);
-
     for (const entry of raw) {
       const value = Number(entry.s ?? entry.state);
-      if (!Number.isFinite(value)) continue;
-      const seconds = entry.lu ?? entry.lc;
-      const stamp =
-        typeof seconds === "number"
-          ? seconds * 1000
-          : Date.parse(entry.last_updated ?? entry.last_changed);
-      if (!Number.isFinite(stamp)) continue;
+      const stamp = this._stampOf(entry);
+      if (!Number.isFinite(value) || !Number.isFinite(stamp)) continue;
       const index = Math.min(
         HISTORY_POINTS - 1,
         Math.max(0, Math.floor(((stamp - startMs) / span) * HISTORY_POINTS))
@@ -318,14 +351,30 @@ class SuptronicsUpsCard extends HTMLElement {
       sums[index] += value;
       counts[index] += 1;
     }
-
     const series = [];
     let last = null;
     for (let i = 0; i < HISTORY_POINTS; i += 1) {
       if (counts[i]) last = sums[i] / counts[i];
-      if (last !== null) series.push(last);
+      series.push(last);
     }
     return series;
+  }
+
+  /** [{from: 0..1, to: 0..1, on: bool}] over the window. */
+  _segmentsBinary(raw, startMs, endMs) {
+    const span = Math.max(endMs - startMs, 1);
+    const points = raw
+      .map((entry) => ({ t: this._stampOf(entry), on: (entry.s ?? entry.state) === "on" }))
+      .filter((p) => Number.isFinite(p.t))
+      .sort((a, b) => a.t - b.t);
+    if (points.length === 0) return [];
+    const segments = [];
+    for (let i = 0; i < points.length; i += 1) {
+      const from = Math.max(0, (points[i].t - startMs) / span);
+      const to = i + 1 < points.length ? (points[i + 1].t - startMs) / span : 1;
+      if (to > from) segments.push({ from, to: Math.min(1, to), on: points[i].on });
+    }
+    return segments;
   }
 
   /* --------------------------------------------------------------- lookup */
@@ -333,21 +382,15 @@ class SuptronicsUpsCard extends HTMLElement {
   _resolveEntities() {
     const resolved = { ...(this._config.entities || {}) };
     const missing = Object.keys(ROLES).filter((role) => !resolved[role]);
-    if (missing.length === 0) {
-      return resolved;
-    }
+    if (missing.length === 0) return resolved;
 
     const registry = this._hass.entities;
-    if (!registry) {
-      return Object.keys(resolved).length ? resolved : null;
-    }
+    if (!registry) return Object.keys(resolved).length ? resolved : null;
 
     const ours = [];
     for (const [entityId, entry] of Object.entries(registry)) {
       if (entry.platform !== PLATFORM) continue;
-      if (this._config.device_id && entry.device_id !== this._config.device_id) {
-        continue;
-      }
+      if (this._config.device_id && entry.device_id !== this._config.device_id) continue;
       ours.push(entityId);
       if (entry.device_id && !this._deviceId) this._deviceId = entry.device_id;
     }
@@ -369,8 +412,7 @@ class SuptronicsUpsCard extends HTMLElement {
 
   _state(role) {
     const entityId = this._entities && this._entities[role];
-    if (!entityId) return null;
-    return this._hass.states[entityId] || null;
+    return entityId ? this._hass.states[entityId] || null : null;
   }
 
   _number(role, fallback = null) {
@@ -383,6 +425,30 @@ class SuptronicsUpsCard extends HTMLElement {
   _isOn(role) {
     const state = this._state(role);
     return state ? state.state === "on" : false;
+  }
+
+  _displayState(state) {
+    if (this._hass.formatEntityState) {
+      try {
+        return this._hass.formatEntityState(state);
+      } catch (err) {
+        /* fall through */
+      }
+    }
+    return state.state.replace(/_/g, " ");
+  }
+
+  _deviceName() {
+    const device =
+      this._hass.devices && this._deviceId ? this._hass.devices[this._deviceId] : null;
+    return device ? device.name_by_user || device.name : null;
+  }
+
+  _openMoreInfo(entityId) {
+    if (!entityId) return;
+    const event = new Event("hass-more-info", { bubbles: true, composed: true });
+    event.detail = { entityId };
+    this.dispatchEvent(event);
   }
 
   /* ---------------------------------------------------------------- build */
@@ -398,57 +464,91 @@ class SuptronicsUpsCard extends HTMLElement {
     this.shadowRoot.append(style, card);
 
     if (!this._entities || !this._entities.capacity) {
-      card.innerHTML = `<div class="empty">
-        <div class="empty-title">Suptronics UPS</div>
-        <p>${this._t("empty")}</p>
-      </div>`;
+      card.innerHTML = `<div class="empty"><div class="empty-title">Suptronics UPS</div><p>${this._t("empty")}</p></div>`;
       return;
     }
 
     card.innerHTML = TEMPLATE;
-
     this._el = {};
     for (const node of card.querySelectorAll("[data-ref]")) {
       this._el[node.dataset.ref] = node;
     }
 
-    this._el.mainsLabel.textContent = this._t("mains");
-    this._el.upsLabel.textContent = this._t("ups");
-    this._el.piLabel.textContent = this._t("pi");
+    // Static geometry of the dial.
+    const arc = describeArc(100, 100, ARC_RADIUS, ARC_SWEEP);
+    this._el.dialTrack.setAttribute("d", arc);
+    this._el.dialValue.setAttribute("d", arc);
+    this._el.dialValue.setAttribute("stroke-dasharray", `${ARC_LENGTH} ${ARC_LENGTH}`);
+    this._el.dialValue.setAttribute("stroke-dashoffset", ARC_LENGTH);
+    // Charge window arc sits just outside the dial.
+    this._el.dialWindow.setAttribute("d", describeArc(100, 100, ARC_RADIUS + 12, ARC_SWEEP));
 
-    this._el.gaugeValue.setAttribute(
-      "stroke-dasharray",
-      `${GAUGE_CIRCUMFERENCE} ${GAUGE_CIRCUMFERENCE}`
-    );
-    this._el.gaugeValue.setAttribute("stroke-dashoffset", GAUGE_CIRCUMFERENCE);
+    // Static labels.
+    this._el.runtimeLabel.textContent = this._t("runtime");
+    this._el.onBatteryLabel.textContent = this._t("on_battery");
+    this._el.voltageLabel.textContent = this._t("voltage");
+    this._el.outagesLabel.textContent = this._t("outages");
+    this._el.historyBattery.textContent = this._t("battery_history");
+    this._el.historyMains.textContent = this._t("mains_history");
+    this._el.axisNow.textContent = this._t("now");
+    this._el.axisStart.textContent = this._t("hours_ago", {
+      hours: Number(this._config.hours) || DEFAULT_HISTORY_HOURS,
+    });
 
     this._shown = this._parts();
     card.dataset.variant = this._config.variant;
-    this._el.flow.toggleAttribute("hidden", !this._shown.flow);
-    this._el.sparkSvg.toggleAttribute("hidden", !this._shown.sparkline);
-    this._el.chips.toggleAttribute("hidden", !this._shown.chips);
+    this._el.stats.toggleAttribute("hidden", !this._shown.stats);
+    this._el.history.toggleAttribute("hidden", !this._shown.history);
+    this._el.actions.toggleAttribute("hidden", !this._shown.actions);
+    this._buildExtras();
 
     for (const node of card.querySelectorAll("[data-role]")) {
-      node.addEventListener("click", () => {
-        const entityId = this._entities[node.dataset.role];
-        if (!entityId) return;
-        const event = new Event("hass-more-info", {
-          bubbles: true,
-          composed: true,
-        });
-        event.detail = { entityId };
-        this.dispatchEvent(event);
-      });
+      node.addEventListener("click", () => this._openMoreInfo(this._entities[node.dataset.role]));
     }
-
     this._el.chargeToggle.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const entityId = this._entities.charge_switch;
-      if (!entityId) return;
-      this._hass.callService("switch", "toggle", { entity_id: entityId });
+      if (entityId) this._hass.callService("switch", "toggle", { entity_id: entityId });
+    });
+    this._el.shutdownToggle.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const entityId = this._entities.shutdown_switch;
+      if (entityId) this._hass.callService("switch", "toggle", { entity_id: entityId });
     });
 
     this._built = true;
+  }
+
+  _buildExtras() {
+    const container = this._el.extras;
+    container.innerHTML = "";
+    const extras = this._config.extras;
+    if (!this._shown.extras || extras.length === 0) {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    this._extraNodes = extras.map((extra) => {
+      const node = document.createElement("div");
+      node.className = "mini";
+      node.innerHTML = `
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path class="mini-track" d="${describeArc(32, 34, MINI_RADIUS, ARC_SWEEP)}"/>
+          <path class="mini-value" d="${describeArc(32, 34, MINI_RADIUS, ARC_SWEEP)}"
+                stroke-dasharray="${MINI_LENGTH} ${MINI_LENGTH}" stroke-dashoffset="${MINI_LENGTH}"/>
+        </svg>
+        <div class="mini-value-text">--</div>
+        <div class="mini-name"></div>`;
+      node.addEventListener("click", () => this._openMoreInfo(extra.entity));
+      container.append(node);
+      return {
+        extra,
+        value: node.querySelector(".mini-value"),
+        text: node.querySelector(".mini-value-text"),
+        name: node.querySelector(".mini-name"),
+        node,
+      };
+    });
   }
 
   /* --------------------------------------------------------------- update */
@@ -460,209 +560,175 @@ class SuptronicsUpsCard extends HTMLElement {
     const voltage = this._number("voltage");
     const acOn = this._isOn("ac");
     const charging = this._isOn("charging");
-    const low = this._isOn("low");
     const statusState = this._state("status");
     const statusKey =
-      statusState && STATUS_THEME[statusState.state] ? statusState.state : "unknown";
-    const theme = STATUS_THEME[statusKey];
+      statusState && STATUS_COLOR[statusState.state] ? statusState.state : "unknown";
     const countdown = this._number("countdown");
 
-    this.style.setProperty("--x-tint", theme.tint);
-
-    // --- headline ---------------------------------------------------------
-    this._el.title.textContent =
-      this._config.name || this._deviceName() || "Suptronics UPS";
+    // --- banner -------------------------------------------------------------
+    this.dataset.status = statusKey;
+    this.dataset.color = STATUS_COLOR[statusKey];
+    this._el.title.textContent = this._config.name || this._deviceName() || "Suptronics UPS";
     if (statusKey === "shutting_down" && countdown !== null) {
-      this._el.statusText.textContent = this._t("countdown", {
-        seconds: Math.round(countdown),
-      });
+      this._el.status.textContent = this._t("countdown", { seconds: Math.round(countdown) });
     } else {
-      this._el.statusText.textContent = statusState
+      this._el.status.textContent = statusState
         ? this._displayState(statusState)
         : this._t(`status_${statusKey}`);
     }
-
-    // --- gauge ------------------------------------------------------------
-    const clamped = Math.max(0, Math.min(100, capacity));
-    this._el.gaugeValue.setAttribute(
-      "stroke-dashoffset",
-      GAUGE_CIRCUMFERENCE * (1 - clamped / 100)
-    );
-    const decimals = Math.round(clamped * 10) % 10 === 0 ? 0 : 1;
-    tweenNumber(this._el.percent, clamped, (value) => value.toFixed(decimals));
-    this._el.voltage.textContent =
-      voltage === null ? "--" : `${voltage.toFixed(2)} V`;
-
-    const levelState = this._state("level");
-    this._el.levelText.textContent = levelState
-      ? this._displayState(levelState)
-      : "";
-
-    this._renderChargeWindow();
-
-    // --- battery cell -----------------------------------------------------
-    const fill = (CELL_HEIGHT * clamped) / 100;
-    this._el.cellFill.setAttribute("y", CELL_TOP + CELL_HEIGHT - fill);
-    this._el.cellFill.setAttribute("height", Math.max(fill, 0.5));
-
+    for (const node of this._el.banner.querySelectorAll(".glyph")) {
+      node.hidden = node.dataset.for !== statusKey;
+    }
     this.classList.toggle("is-charging", charging);
-    this.classList.toggle(
-      "is-alert",
-      low || statusKey === "low_battery" || statusKey === "shutting_down"
-    );
+    this.classList.toggle("is-alert", statusKey === "low_battery" || statusKey === "shutting_down");
 
-    // --- flow lane --------------------------------------------------------
-    this._el.flow.dataset.direction = acOn ? "in" : "out";
-    this._el.mains.classList.toggle("off", !acOn);
+    // --- dial ---------------------------------------------------------------
+    const clamped = Math.max(0, Math.min(100, capacity));
+    this._el.dialValue.setAttribute("stroke-dashoffset", ARC_LENGTH * (1 - clamped / 100));
+    this.dataset.band = severityColor(clamped, BATTERY_SEVERITY);
+    const decimals = Math.round(clamped * 10) % 10 === 0 ? 0 : 1;
+    this._el.percent.textContent = clamped.toFixed(decimals);
+    const levelState = this._state("level");
+    this._el.level.textContent = levelState ? this._displayState(levelState) : "";
+    this._renderWindow();
 
-    // --- chips ------------------------------------------------------------
-    this._setChip("chipAc", this._t(acOn ? "mains_ok" : "mains_lost"), acOn);
-    this._setChip(
-      "chipCharge",
-      this._t(charging ? "charging" : acOn ? "not_charging" : "discharging"),
-      charging || acOn
-    );
-    this._setChip("chipLow", this._t(low ? "battery_low" : "battery_healthy"), !low);
-
-    // Runtime estimate: always shown when the integration has one.
+    // --- stats --------------------------------------------------------------
     const runtime = this._number("runtime");
-    this._setChip(
-      "chipRuntime",
-      runtime === null ? null : this._t("runtime", { time: this._duration(runtime) }),
-      runtime === null || runtime > 30
-    );
-    // Time on battery: only while the mains are gone.
-    const onBattery = this._number("on_battery");
-    this._setChip(
-      "chipOnBattery",
-      !acOn && onBattery !== null
-        ? this._t("on_battery_for", { time: this._duration(onBattery) })
-        : null,
-      false
-    );
-    // Automatic shutdown armed.
-    this._setChip(
-      "chipShutdown",
-      this._isOn("shutdown_switch") ? this._t("auto_shutdown") : null,
-      true
-    );
+    this._el.runtimeValue.textContent = runtime === null ? this._t("unknown") : this._duration(runtime);
+    this._el.runtimeHint.textContent = runtime === null ? "" : this._t("runtime_hint");
 
+    const onBattery = this._number("on_battery");
+    const lastLoss = this._state("last_loss");
+    if (!acOn && onBattery !== null) {
+      this._el.onBatteryLabel.textContent = this._t("on_battery");
+      this._el.onBatteryValue.textContent = this._duration(onBattery);
+    } else {
+      this._el.onBatteryLabel.textContent = this._t("last_loss");
+      this._el.onBatteryValue.textContent =
+        lastLoss && lastLoss.state && lastLoss.state !== "unknown"
+          ? this._relativeTime(lastLoss.state)
+          : this._t("never");
+    }
+    this._el.voltageValue.textContent = voltage === null ? "--" : `${voltage.toFixed(2)} V`;
+    const outages = this._number("outages");
+    this._el.outagesValue.textContent = outages === null ? "--" : String(Math.round(outages));
+
+    // --- actions ------------------------------------------------------------
     const chargeSwitch = this._state("charge_switch");
-    if (chargeSwitch && this._shown.button) {
+    if (chargeSwitch) {
       const on = chargeSwitch.state === "on";
       this._el.chargeToggle.hidden = false;
       this._el.chargeToggle.dataset.on = String(on);
-      this._el.chargeToggle.textContent = this._t(
-        on ? "charging_enabled" : "charging_paused"
-      );
+      this._el.chargeToggle.textContent = this._t(on ? "charging_enabled" : "charging_paused");
     } else {
       this._el.chargeToggle.hidden = true;
     }
-
-    if (this._shown.sparkline) {
-      this._pushHistory(clamped);
-      this._drawSparkline();
+    const shutdownSwitch = this._state("shutdown_switch");
+    if (shutdownSwitch) {
+      const on = shutdownSwitch.state === "on";
+      this._el.shutdownToggle.hidden = false;
+      this._el.shutdownToggle.dataset.on = String(on);
+      this._el.shutdownToggle.textContent = this._t(on ? "shutdown_on" : "shutdown_off");
+    } else {
+      this._el.shutdownToggle.hidden = true;
     }
+
+    // --- extras -------------------------------------------------------------
+    this._updateExtras();
+
+    if (this._shown.history) this._drawHistory();
   }
 
-  _renderChargeWindow() {
-    const arc = this._el.gaugeWindow;
-    const chip = this._el.chipWindow;
+  _renderWindow() {
     const attrs = (this._state("charge_switch") || {}).attributes || {};
     const min = Number(attrs.charge_limit_min);
     const max = Number(attrs.charge_limit_max);
-
-    const limited =
-      Number.isFinite(min) && Number.isFinite(max) && max < 100 && max > min;
-
+    const limited = Number.isFinite(min) && Number.isFinite(max) && max < 100 && max > min;
+    const arc = this._el.dialWindow;
+    const outerLength = (2 * Math.PI * (ARC_RADIUS + 12) * ARC_SWEEP) / 360;
     if (!limited) {
-      if (arc) arc.style.opacity = "0";
-      if (chip) chip.hidden = true;
+      arc.style.opacity = "0";
+      this._el.windowText.hidden = true;
       return;
     }
-
-    const length = (WINDOW_CIRCUMFERENCE * (max - min)) / 100;
-    arc.setAttribute("stroke-dasharray", `${length} ${WINDOW_CIRCUMFERENCE - length}`);
-    arc.setAttribute("stroke-dashoffset", -(WINDOW_CIRCUMFERENCE * min) / 100);
+    const length = (outerLength * (max - min)) / 100;
+    arc.setAttribute("stroke-dasharray", `${length} ${outerLength}`);
+    arc.setAttribute("stroke-dashoffset", -(outerLength * min) / 100);
     arc.style.opacity = "1";
-
-    chip.hidden = false;
-    chip.querySelector(".chip-text").textContent = this._t("hold", {
+    this._el.windowText.hidden = false;
+    this._el.windowText.textContent = this._t("window", {
       min: Math.round(min),
       max: Math.round(max),
     });
   }
 
-  /** Text null hides the chip. */
-  _setChip(ref, text, good) {
-    const chip = this._el[ref];
-    if (!chip) return;
-    if (text === null) {
-      chip.hidden = true;
-      return;
-    }
-    chip.hidden = false;
-    chip.querySelector(".chip-text").textContent = text;
-    chip.dataset.good = String(Boolean(good));
-  }
-
-  _displayState(state) {
-    if (this._hass.formatEntityState) {
-      try {
-        return this._hass.formatEntityState(state);
-      } catch (err) {
-        /* fall through to the raw state */
+  _updateExtras() {
+    if (!this._extraNodes) return;
+    for (const item of this._extraNodes) {
+      const state = this._hass.states[item.extra.entity];
+      const value = state ? Number(state.state) : NaN;
+      const min = Number.isFinite(Number(item.extra.min)) ? Number(item.extra.min) : 0;
+      const max = Number.isFinite(Number(item.extra.max)) ? Number(item.extra.max) : 100;
+      const unit = item.extra.unit ?? (state && state.attributes.unit_of_measurement) ?? "";
+      const name =
+        item.extra.name ||
+        (state && state.attributes.friendly_name) ||
+        item.extra.entity;
+      item.name.textContent = name;
+      if (!Number.isFinite(value)) {
+        item.text.textContent = "--";
+        item.value.setAttribute("stroke-dashoffset", MINI_LENGTH);
+        item.node.dataset.color = "muted";
+        continue;
       }
+      const fraction = Math.max(0, Math.min(1, (value - min) / Math.max(max - min, 1e-9)));
+      item.value.setAttribute("stroke-dashoffset", MINI_LENGTH * (1 - fraction));
+      const decimals = Number.isFinite(Number(item.extra.decimals))
+        ? Number(item.extra.decimals)
+        : Math.abs(value) >= 100
+          ? 0
+          : 1;
+      item.text.textContent = `${value.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+      item.node.dataset.color = severityColor(value, item.extra.severity);
     }
-    return state.state.replace(/_/g, " ");
   }
 
-  _deviceName() {
-    const device =
-      this._hass.devices && this._deviceId
-        ? this._hass.devices[this._deviceId]
-        : null;
-    return device ? device.name_by_user || device.name : null;
-  }
+  /* -------------------------------------------------------------- history */
 
-  /* ------------------------------------------------------------ sparkline */
-
-  _pushHistory(capacity) {
-    const last = this._history[this._history.length - 1];
-    if (last === capacity) return;
-    this._history.push(capacity);
-    if (this._history.length > HISTORY_POINTS) this._history.shift();
-  }
-
-  _drawSparkline() {
+  _drawHistory() {
     const line = this._el.spark;
     const area = this._el.sparkArea;
+    const strip = this._el.mainsStrip;
     if (!line) return;
 
-    const series =
-      this._recorded && this._recorded.length >= 2 ? this._recorded : this._history;
-
-    if (series.length < 2) {
-      line.setAttribute("points", "0,11 100,11");
-      line.classList.add("empty");
-      if (area) area.setAttribute("d", "");
-      return;
+    const series = this._batteryTrace || [];
+    const known = series.filter((v) => v !== null);
+    if (known.length < 2) {
+      line.setAttribute("points", "");
+      area.setAttribute("d", "");
+    } else {
+      const stepX = 100 / (series.length - 1);
+      const coords = [];
+      series.forEach((value, index) => {
+        if (value === null) return;
+        const y = 30 - (value / 100) * 28;
+        coords.push(`${(index * stepX).toFixed(2)},${y.toFixed(2)}`);
+      });
+      line.setAttribute("points", coords.join(" "));
+      const first = coords[0].split(",")[0];
+      const last = coords[coords.length - 1].split(",")[0];
+      area.setAttribute("d", `M${first},32 L${coords.join(" L")} L${last},32 Z`);
     }
-    line.classList.remove("empty");
 
-    const min = Math.min(...series);
-    const max = Math.max(...series);
-    const span = Math.max(max - min, 1);
-    const stepX = 100 / (series.length - 1);
-    const coords = series.map((value, index) => {
-      const x = index * stepX;
-      const y = 19 - ((value - min) / span) * 16;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    });
-
-    line.setAttribute("points", coords.join(" "));
-    if (area) {
-      area.setAttribute("d", `M0,22 L${coords.join(" L")} L100,22 Z`);
+    strip.innerHTML = "";
+    for (const seg of this._mainsTrace || []) {
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", (seg.from * 100).toFixed(2));
+      rect.setAttribute("y", "0");
+      rect.setAttribute("width", ((seg.to - seg.from) * 100).toFixed(2));
+      rect.setAttribute("height", "6");
+      rect.setAttribute("class", seg.on ? "on" : "off");
+      strip.append(rect);
     }
   }
 }
@@ -670,110 +736,75 @@ class SuptronicsUpsCard extends HTMLElement {
 /* ---------------------------------------------------------------- markup */
 
 const TEMPLATE = `
-<div class="glow"></div>
-<div class="head">
-  <div class="title" data-ref="title">Suptronics UPS</div>
-  <div class="status" data-ref="status" data-role="status">
-    <span class="dot"></span>
-    <span data-ref="statusText">--</span>
+<div class="banner" data-ref="banner" data-role="status">
+  <svg class="glyph" data-for="online" viewBox="0 0 24 24"><path d="M16 7V3h-2v4h-4V3H8v4H8C6.9 7 6 7.9 6 9v5.5L9.5 18v3h5v-3l3.5-3.5V9c0-1.1-.9-2-2-2z"/></svg>
+  <svg class="glyph" data-for="charging" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg>
+  <svg class="glyph" data-for="on_battery" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33C6.6 4 6 4.6 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4zM16 20H8v-4h8v4z"/></svg>
+  <svg class="glyph" data-for="low_battery" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33C6.6 4 6 4.6 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4zM13 18h-2v-2h2v2zm0-4h-2V9h2v5z"/></svg>
+  <svg class="glyph" data-for="shutting_down" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A6.92 6.92 0 0 1 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.17.98-4.1 2.58-5.42L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+  <svg class="glyph" data-for="unknown" viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
+  <div class="banner-text">
+    <div class="title" data-ref="title">Suptronics UPS</div>
+    <div class="status" data-ref="status">--</div>
+  </div>
+  <div class="window-text" data-ref="windowText" hidden></div>
+</div>
+
+<div class="main">
+  <div class="dial" data-role="capacity">
+    <svg viewBox="0 0 200 180" aria-hidden="true">
+      <path class="dial-window" data-ref="dialWindow"/>
+      <path class="dial-track" data-ref="dialTrack"/>
+      <path class="dial-value" data-ref="dialValue"/>
+    </svg>
+    <div class="dial-readout">
+      <div class="percent"><span data-ref="percent">--</span><i>%</i></div>
+      <div class="level" data-ref="level"></div>
+    </div>
+  </div>
+
+  <div class="stats" data-ref="stats">
+    <div class="stat" data-role="runtime">
+      <div class="stat-label" data-ref="runtimeLabel"></div>
+      <div class="stat-value" data-ref="runtimeValue">--</div>
+      <div class="stat-hint" data-ref="runtimeHint"></div>
+    </div>
+    <div class="stat" data-role="last_loss">
+      <div class="stat-label" data-ref="onBatteryLabel"></div>
+      <div class="stat-value" data-ref="onBatteryValue">--</div>
+    </div>
+    <div class="stat" data-role="voltage">
+      <div class="stat-label" data-ref="voltageLabel"></div>
+      <div class="stat-value" data-ref="voltageValue">--</div>
+    </div>
+    <div class="stat" data-role="outages">
+      <div class="stat-label" data-ref="outagesLabel"></div>
+      <div class="stat-value" data-ref="outagesValue">--</div>
+    </div>
   </div>
 </div>
 
-<div class="body">
-  <div class="gauge" data-role="capacity">
-    <svg viewBox="0 0 200 200" aria-hidden="true">
-      <defs>
-        <linearGradient id="x-arc" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="var(--x-tint)" stop-opacity="0.3"/>
-          <stop offset="100%" stop-color="var(--x-tint)"/>
-        </linearGradient>
-        <linearGradient id="x-liquid" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--x-tint)"/>
-          <stop offset="100%" stop-color="var(--x-tint)" stop-opacity="0.6"/>
-        </linearGradient>
-        <linearGradient id="x-spark" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--x-tint)" stop-opacity="0.4"/>
-          <stop offset="100%" stop-color="var(--x-tint)" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <circle class="window" data-ref="gaugeWindow" cx="100" cy="100" r="92"
-              transform="rotate(-90 100 100)"/>
-      <circle class="track" cx="100" cy="100" r="78"/>
-      <circle class="value" data-ref="gaugeValue" cx="100" cy="100" r="78"
-              transform="rotate(-90 100 100)"/>
-      <circle class="sweep" cx="100" cy="100" r="78"/>
-    </svg>
-    <div class="readout">
-      <div class="percent"><span data-ref="percent">--</span><i>%</i></div>
-      <div class="volts" data-ref="voltage" data-role="voltage">--</div>
-      <div class="level" data-ref="levelText"></div>
-    </div>
+<div class="history" data-ref="history">
+  <div class="history-head">
+    <span class="legend legend-battery" data-ref="historyBattery"></span>
+    <span class="legend legend-mains" data-ref="historyMains"></span>
   </div>
+  <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+    <path class="spark-area" data-ref="sparkArea" d=""/>
+    <polyline data-ref="spark" points=""/>
+  </svg>
+  <svg class="strip" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+    <rect class="strip-bg" x="0" y="0" width="100" height="6"/>
+    <g data-ref="mainsStrip"></g>
+  </svg>
+  <div class="axis"><span data-ref="axisStart"></span><span data-ref="axisNow"></span></div>
+</div>
 
-  <div class="side">
-    <div class="flow" data-ref="flow" data-direction="in">
-      <div class="node mains" data-ref="mains" data-role="ac">
-        <svg class="glyph" viewBox="0 0 24 24"><path d="M7 2v6h2V2H7zm8 0v6h2V2h-2zM6 9v4a6 6 0 0 0 5 5.9V22h2v-3.1A6 6 0 0 0 18 13V9H6z"/></svg>
-        <span data-ref="mainsLabel">Mains</span>
-      </div>
-      <div class="lane lane-in"><span class="pulse"></span></div>
-      <div class="node ups" data-role="charging">
-        <svg class="cell" viewBox="0 0 60 100" aria-hidden="true">
-          <rect class="cap" x="24" y="12" width="12" height="6" rx="2"/>
-          <rect class="shell" x="14" y="18" width="32" height="64" rx="7"/>
-          <clipPath id="x-cell-clip">
-            <rect x="17.5" y="21.5" width="25" height="57" rx="5"/>
-          </clipPath>
-          <g clip-path="url(#x-cell-clip)">
-            <rect class="liquid" data-ref="cellFill" x="17.5" y="78" width="25" height="0"/>
-            <g class="bubbles">
-              <circle cx="24" cy="72" r="2"/>
-              <circle cx="34" cy="76" r="1.5"/>
-              <circle cx="29" cy="80" r="2.4"/>
-            </g>
-          </g>
-          <path class="bolt" d="M33 32 L25 54 L31 54 L28 70 L38 46 L32 46 Z"/>
-        </svg>
-        <span data-ref="upsLabel">UPS</span>
-      </div>
-      <div class="lane lane-out"><span class="pulse"></span></div>
-      <div class="node pi">
-        <svg class="glyph" viewBox="0 0 24 24"><path d="M8 2v2H6v2H4v12h2v2h2v-2h8v2h2v-2h2V6h-2V4h-2V2h-2v2H10V2H8zm1 6h6v8H9V8z"/></svg>
-        <span data-ref="piLabel">Pi</span>
-      </div>
-    </div>
+<div class="extras" data-ref="extras" hidden></div>
 
-    <svg class="spark" data-ref="sparkSvg" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true">
-      <path class="spark-area" data-ref="sparkArea" d=""/>
-      <polyline data-ref="spark" points=""/>
-    </svg>
-
-    <div class="chips" data-ref="chips">
-      <div class="chip" data-ref="chipAc" data-role="ac">
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-      <div class="chip" data-ref="chipCharge" data-role="charging">
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-      <div class="chip" data-ref="chipLow" data-role="low">
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-      <div class="chip" data-ref="chipRuntime" data-role="runtime" hidden>
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-      <div class="chip" data-ref="chipOnBattery" data-role="on_battery" hidden>
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-      <div class="chip window-chip" data-ref="chipWindow" data-role="charge_switch" data-good="true" hidden>
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-      <div class="chip" data-ref="chipShutdown" data-role="shutdown_switch" hidden>
-        <span class="chip-dot"></span><span class="chip-text">--</span>
-      </div>
-    </div>
-
-    <button class="charge-toggle" data-ref="chargeToggle" hidden>--</button>
-  </div>
+<div class="actions" data-ref="actions">
+  <button class="toggle" data-ref="chargeToggle" hidden>--</button>
+  <button class="toggle" data-ref="shutdownToggle" hidden>--</button>
 </div>
 `;
 
@@ -781,365 +812,252 @@ const TEMPLATE = `
 
 const STYLES = `
 :host {
-  --x-tint: #3ddc97;
-  --x-ink: var(--primary-text-color, #e8ecf1);
-  --x-muted: var(--secondary-text-color, #93a0b4);
-  --x-surface: var(--ha-card-background, var(--card-background-color, #16181d));
+  --u-good: var(--success-color, #43a047);
+  --u-warn: var(--warning-color, #ffa600);
+  --u-bad: var(--error-color, #db4437);
+  --u-info: var(--info-color, #039be5);
+  --u-accent: var(--primary-color, #03a9f4);
+  --u-muted: var(--secondary-text-color, #8a94a6);
+  --u-ink: var(--primary-text-color, #e1e1e1);
+  --u-line: var(--divider-color, rgba(127,127,127,.25));
+  --u-tile: rgba(127, 127, 127, .10);
+  --u-color: var(--u-good);
   display: block;
   container-type: inline-size;
 }
+:host([data-color="good"]) { --u-color: var(--u-good); }
+:host([data-color="info"]) { --u-color: var(--u-info); }
+:host([data-color="warn"]) { --u-color: var(--u-warn); }
+:host([data-color="bad"]) { --u-color: var(--u-bad); }
+:host([data-color="muted"]) { --u-color: var(--u-muted); }
+:host([data-band="good"]) { --u-band: var(--u-good); }
+:host([data-band="warn"]) { --u-band: var(--u-warn); }
+:host([data-band="bad"]) { --u-band: var(--u-bad); }
 
 ha-card.ups {
-  position: relative;
   display: block;
   overflow: hidden;
-  padding: 18px;
-  background:
-    radial-gradient(130% 100% at 100% 0%, color-mix(in srgb, var(--x-tint) 13%, transparent), transparent 58%),
-    var(--x-surface);
+  padding: 0 16px 14px;
+  border-top: 4px solid var(--u-color);
+  transition: border-color 400ms ease;
 }
 
-.glow {
-  position: absolute;
-  inset: -45% -20% auto -20%;
-  height: 75%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--x-tint) 32%, transparent), transparent);
-  filter: blur(30px);
-  opacity: .5;
-  pointer-events: none;
-  transition: opacity 600ms ease;
-}
-:host(.is-alert) .glow { animation: breathe 2.2s ease-in-out infinite; }
-
-.head {
-  position: relative;
+/* --- banner --- */
+.banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--u-line);
+  cursor: pointer;
 }
+.banner .glyph {
+  flex: none;
+  width: 32px; height: 32px;
+  padding: 6px;
+  border-radius: 10px;
+  fill: #fff;
+  background: var(--u-color);
+  transition: background 400ms ease;
+}
+.banner .glyph[hidden] { display: none; }
+:host(.is-alert) .banner .glyph { animation: blink 1.4s ease-in-out infinite; }
+.banner-text { min-width: 0; flex: 1; }
 .title {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--x-ink);
+  font-size: .8rem;
+  color: var(--u-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: .76rem;
+  font-size: 1.15rem;
   font-weight: 600;
-  white-space: nowrap;
-  color: var(--x-tint);
-  background: color-mix(in srgb, var(--x-tint) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--x-tint) 32%, transparent);
+  color: var(--u-ink);
+  line-height: 1.2;
 }
-.status .dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--x-tint);
-  animation: ping 2.4s ease-out infinite;
+.window-text {
+  flex: none;
+  font-size: .72rem;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--u-line);
+  color: var(--u-muted);
 }
+.window-text[hidden] { display: none; }
 
-.body {
-  position: relative;
+/* --- main --- */
+.main {
   display: grid;
-  grid-template-columns: 190px 1fr;
-  gap: 18px;
+  grid-template-columns: 200px 1fr;
+  gap: 14px;
   align-items: center;
+  padding-top: 8px;
 }
-@container (max-width: 470px) {
-  .body { grid-template-columns: 1fr; gap: 10px; }
+@container (max-width: 440px) {
+  .main { grid-template-columns: 1fr; }
 }
 
-/* --- gauge --- */
-.gauge {
-  position: relative;
-  width: 100%;
-  max-width: 190px;
-  aspect-ratio: 1;
-  margin: 0 auto;
-  cursor: pointer;
-}
-.gauge > svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.gauge .track {
+.dial { position: relative; width: 200px; max-width: 100%; margin: 0 auto; cursor: pointer; }
+.dial > svg { width: 100%; display: block; overflow: visible; }
+.dial-track { fill: none; stroke: var(--u-tile); stroke-width: 14; stroke-linecap: round; }
+.dial-value {
   fill: none;
-  stroke: color-mix(in srgb, var(--x-ink) 9%, transparent);
-  stroke-width: 13;
-}
-.gauge .value {
-  fill: none;
-  stroke: url(#x-arc);
-  stroke-width: 13;
+  stroke: var(--u-band, var(--u-good));
+  stroke-width: 14;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--x-tint) 55%, transparent));
-  transition: stroke-dashoffset 900ms cubic-bezier(.22,.61,.36,1);
+  transition: stroke-dashoffset 900ms cubic-bezier(.22,.61,.36,1), stroke 400ms ease;
 }
-.gauge .window {
+:host(.is-charging) .dial-value { animation: pulse 2.4s ease-in-out infinite; }
+.dial-window {
   fill: none;
-  stroke: color-mix(in srgb, var(--x-tint) 55%, transparent);
+  stroke: var(--u-accent);
   stroke-width: 3;
   stroke-linecap: round;
-  opacity: 0;
-  transition: opacity 400ms ease, stroke-dashoffset 600ms ease;
-}
-.gauge .sweep {
-  fill: none;
-  stroke: color-mix(in srgb, var(--x-tint) 65%, transparent);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-dasharray: 16 500;
-  transform-origin: 100px 100px;
-  opacity: 0;
-}
-:host(.is-charging) .gauge .sweep { opacity: 1; animation: orbit 3.4s linear infinite; }
-
-.readout {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-.percent {
-  font-size: 2.4rem;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--x-ink);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -.02em;
-}
-.percent i { font-size: .95rem; font-style: normal; color: var(--x-muted); margin-left: 3px; }
-.volts {
-  margin-top: 6px;
-  font-size: .84rem;
-  color: var(--x-muted);
-  font-variant-numeric: tabular-nums;
-  pointer-events: auto;
-  cursor: pointer;
-}
-.level {
-  margin-top: 2px;
-  font-size: .64rem;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--x-tint) 90%, var(--x-muted));
-}
-
-/* --- flow --- */
-.side {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  max-width: 460px;
-}
-.flow {
-  display: grid;
-  grid-template-columns: auto minmax(14px, 1fr) auto minmax(14px, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-.node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: .6rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--x-muted);
-}
-.node .glyph {
-  width: 26px; height: 26px;
-  fill: var(--x-ink);
-  opacity: .8;
-  transition: opacity 300ms ease;
-}
-.node.mains { cursor: pointer; }
-.node.mains.off .glyph { opacity: .25; }
-.node.mains.off { color: color-mix(in srgb, #ff5c5c 75%, var(--x-muted)); }
-.node.ups { cursor: pointer; color: var(--x-tint); }
-
-.cell { width: 30px; height: 50px; display: block; }
-.cell .shell {
-  fill: none;
-  stroke: color-mix(in srgb, var(--x-ink) 30%, transparent);
-  stroke-width: 3;
-}
-.cell .cap { fill: color-mix(in srgb, var(--x-ink) 30%, transparent); }
-.cell .liquid {
-  fill: url(#x-liquid);
-  transition: y 900ms cubic-bezier(.22,.61,.36,1), height 900ms cubic-bezier(.22,.61,.36,1);
-}
-.cell .bubbles circle { fill: #fff; opacity: 0; }
-:host(.is-charging) .cell .bubbles circle { animation: rise 2.6s ease-in infinite; }
-:host(.is-charging) .cell .bubbles circle:nth-child(2) { animation-delay: .8s; }
-:host(.is-charging) .cell .bubbles circle:nth-child(3) { animation-delay: 1.6s; }
-.cell .bolt {
-  fill: #fff;
   opacity: 0;
   transition: opacity 400ms ease;
 }
-:host(.is-charging) .cell .bolt { opacity: .9; }
-
-.lane {
-  position: relative;
-  height: 3px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--x-ink) 12%, transparent);
-  overflow: hidden;
-}
-.lane .pulse {
+.dial-readout {
   position: absolute;
-  top: 0; bottom: 0;
-  width: 45%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--x-tint), transparent);
-  animation: slide 1.9s linear infinite;
+  left: 0; right: 0; top: 46%;
+  transform: translateY(-50%);
+  text-align: center;
+  pointer-events: none;
 }
-.flow[data-direction="out"] .lane-in .pulse { opacity: 0; animation: none; }
+.percent {
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--u-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+.percent i { font-size: 1rem; font-style: normal; color: var(--u-muted); margin-left: 2px; }
+.level {
+  margin-top: 4px;
+  font-size: .7rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--u-band, var(--u-muted));
+}
 
-/* --- sparkline --- */
-.spark { width: 100%; height: 30px; display: block; }
+/* --- stats --- */
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+.stats[hidden] { display: none; }
+.stat {
+  background: var(--u-tile);
+  border-radius: 10px;
+  padding: 9px 11px;
+  cursor: pointer;
+  min-width: 0;
+}
+.stat-label { font-size: .7rem; color: var(--u-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-value { font-size: 1.05rem; font-weight: 600; color: var(--u-ink); margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-hint { font-size: .66rem; color: var(--u-muted); }
+
+/* --- history --- */
+.history { margin-top: 12px; }
+.history[hidden] { display: none; }
+.history-head { display: flex; gap: 12px; font-size: .68rem; color: var(--u-muted); margin-bottom: 4px; }
+.legend::before {
+  content: "";
+  display: inline-block;
+  width: 10px; height: 4px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.legend-battery::before { background: var(--u-accent); }
+.legend-mains::before { background: var(--u-good); }
+.spark { width: 100%; height: 44px; display: block; }
 .spark polyline {
   fill: none;
-  stroke: var(--x-tint);
-  stroke-width: 1.8;
+  stroke: var(--u-accent);
+  stroke-width: 1.6;
   stroke-linejoin: round;
-  stroke-linecap: round;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--x-tint) 45%, transparent));
 }
-.spark .spark-area { fill: url(#x-spark); stroke: none; }
-.spark polyline.empty {
-  stroke: color-mix(in srgb, var(--x-ink) 22%, transparent);
-  stroke-width: 1.2;
-  stroke-dasharray: 3 4;
-  filter: none;
-}
+.spark-area { fill: var(--u-accent); opacity: .12; }
+.strip { width: 100%; height: 6px; display: block; margin-top: 3px; border-radius: 3px; overflow: hidden; }
+.strip-bg { fill: var(--u-tile); }
+.strip rect.on { fill: var(--u-good); }
+.strip rect.off { fill: var(--u-bad); }
+.axis { display: flex; justify-content: space-between; font-size: .64rem; color: var(--u-muted); margin-top: 3px; }
 
-/* --- chips --- */
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
-  display: inline-flex;
-  align-items: center;
+/* --- extras --- */
+.extras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: .73rem;
-  color: var(--x-muted);
-  background: color-mix(in srgb, var(--x-ink) 7%, transparent);
-  transition: background 250ms ease, color 250ms ease;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--u-line);
 }
-.chip[hidden] { display: none; }
-.chip:hover { background: color-mix(in srgb, var(--x-ink) 13%, transparent); }
-.chip .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff5c5c; }
-.chip[data-good="true"] .chip-dot { background: var(--x-tint); }
-.chip[data-good="true"] { color: var(--x-ink); }
-.chip.window-chip {
-  background: color-mix(in srgb, var(--x-tint) 12%, transparent);
-  color: var(--x-tint);
+.extras[hidden] { display: none; }
+.mini { position: relative; text-align: center; cursor: pointer; --m-color: var(--u-accent); }
+.mini[data-color="good"] { --m-color: var(--u-good); }
+.mini[data-color="warn"] { --m-color: var(--u-warn); }
+.mini[data-color="bad"] { --m-color: var(--u-bad); }
+.mini[data-color="muted"] { --m-color: var(--u-muted); }
+.mini svg { width: 64px; height: 64px; display: block; margin: 0 auto; }
+.mini-track { fill: none; stroke: var(--u-tile); stroke-width: 6; stroke-linecap: round; }
+.mini-value { fill: none; stroke: var(--m-color); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 700ms ease, stroke 400ms ease; }
+.mini-value-text {
+  position: absolute; left: 0; right: 0; top: 24px;
+  font-size: .78rem; font-weight: 600; color: var(--u-ink);
+  font-variant-numeric: tabular-nums;
 }
+.mini-name { font-size: .64rem; color: var(--u-muted); margin-top: -6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.charge-toggle {
+/* --- actions --- */
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions[hidden] { display: none; }
+.toggle {
   appearance: none;
-  border: 1px solid color-mix(in srgb, var(--x-ink) 16%, transparent);
+  flex: 1 1 auto;
+  border: 1px solid var(--u-line);
   background: transparent;
-  color: var(--x-muted);
-  border-radius: 10px;
+  color: var(--u-muted);
+  border-radius: 8px;
   padding: 8px 12px;
   font: inherit;
   font-size: .78rem;
   cursor: pointer;
-  transition: color 250ms ease, border-color 250ms ease, background 250ms ease, transform 150ms ease;
+  transition: color 250ms ease, border-color 250ms ease, background 250ms ease;
 }
-.charge-toggle[data-on="true"] {
-  color: var(--x-tint);
-  border-color: color-mix(in srgb, var(--x-tint) 45%, transparent);
-  background: color-mix(in srgb, var(--x-tint) 10%, transparent);
+.toggle[hidden] { display: none; }
+.toggle[data-on="true"] {
+  color: var(--u-good);
+  border-color: var(--u-good);
+  background: color-mix(in srgb, var(--u-good) 10%, transparent);
 }
-.charge-toggle:hover { transform: translateY(-1px); }
+.toggle:hover { filter: brightness(1.15); }
 
 /* --- variants --- */
-[hidden] { display: none !important; }
+[data-variant="compact"] .main { grid-template-columns: 150px 1fr; }
+[data-variant="compact"] .dial { width: 150px; }
+[data-variant="compact"] .percent { font-size: 2rem; }
+[data-variant="gauge"] .main { grid-template-columns: 1fr; }
+[data-variant="gauge"] .dial { width: 220px; }
 
-ha-card.ups[data-variant="compact"] { padding: 14px 16px; }
-[data-variant="compact"] .body { grid-template-columns: 130px 1fr; gap: 14px; }
-[data-variant="compact"] .gauge { max-width: 130px; }
-[data-variant="compact"] .percent { font-size: 1.8rem; }
-[data-variant="compact"] .volts { margin-top: 4px; font-size: .76rem; }
-[data-variant="compact"] .level { display: none; }
+.empty { padding: 14px 4px; color: var(--u-muted); }
+.empty-title { font-size: 1.05rem; font-weight: 600; color: var(--u-ink); margin-bottom: 6px; }
 
-ha-card.ups[data-variant="slim"] { padding: 12px 16px; }
-[data-variant="slim"] .head { margin-bottom: 4px; }
-[data-variant="slim"] .body { grid-template-columns: 84px 1fr; gap: 14px; }
-[data-variant="slim"] .gauge { max-width: 84px; }
-[data-variant="slim"] .gauge .track,
-[data-variant="slim"] .gauge .value { stroke-width: 16; }
-[data-variant="slim"] .percent { font-size: 1.25rem; }
-[data-variant="slim"] .percent i { font-size: .7rem; }
-[data-variant="slim"] .volts,
-[data-variant="slim"] .level { display: none; }
-[data-variant="slim"] .chips { gap: 5px; }
-[data-variant="slim"] .gauge .window { display: none; }
-[data-variant="slim"] .flow { gap: 6px; grid-template-columns: auto minmax(10px, 1fr) auto minmax(10px, 1fr) auto; }
-[data-variant="slim"] .node { gap: 2px; font-size: .52rem; letter-spacing: .05em; }
-[data-variant="slim"] .node .glyph { width: 19px; height: 19px; }
-[data-variant="slim"] .cell { width: 21px; height: 35px; }
-
-.head, .body { animation: rise-in 520ms cubic-bezier(.22,.61,.36,1) both; }
-.body { animation-delay: 60ms; }
-
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .55; }
 }
-
-ha-card.ups[data-variant="gauge"] { padding: 16px; }
-[data-variant="gauge"] .body { grid-template-columns: 1fr; }
-[data-variant="gauge"] .side { display: none; }
-[data-variant="gauge"] .gauge { max-width: 220px; }
-
-.empty { padding: 8px 4px; color: var(--x-muted); }
-.empty-title { font-size: 1.05rem; font-weight: 600; color: var(--x-ink); margin-bottom: 6px; }
-
-@keyframes ping {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--x-tint) 70%, transparent); }
-  70%  { box-shadow: 0 0 0 7px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
 }
-@keyframes slide {
-  from { transform: translateX(-120%); }
-  to   { transform: translateX(260%); }
-}
-@keyframes orbit {
-  from { transform: rotate(-90deg); }
-  to   { transform: rotate(270deg); }
-}
-@keyframes rise {
-  0%   { opacity: 0; transform: translateY(0) scale(.6); }
-  25%  { opacity: .5; }
-  100% { opacity: 0; transform: translateY(-46px) scale(1); }
-}
-@keyframes breathe {
-  0%, 100% { opacity: .3; }
-  50%      { opacity: .85; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .glow, .status .dot, .lane .pulse, .cell .bubbles circle, .gauge .sweep,
-  .head, .body {
-    animation: none !important;
-  }
-  .gauge .value, .cell .liquid { transition: none; }
+  .dial-value, .banner .glyph { animation: none !important; }
+  .dial-value, .mini-value { transition: none; }
 }
 `;
 
@@ -1153,7 +1071,7 @@ if (!window.customCards.some((card) => card.type === CARD_TYPE)) {
     type: CARD_TYPE,
     name: "Suptronics UPS",
     description:
-      "Animated status panel for the Suptronics X120x UPS: charge gauge, mains flow, runtime estimate and charge control.",
+      "Status panel for the Suptronics X120x UPS: battery dial, runtime estimate, outage history, charge and shutdown controls, optional extra gauges.",
     preview: true,
   });
 }

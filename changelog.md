@@ -28,9 +28,13 @@ keys, so an update carries history, automations and settings over.
   **Battery low** binary sensors.
 - **Time on battery**, **Last power loss**, **Last power restored**,
   **Power outages** and **Shutdown countdown** sensors.
-- **Dashboard card** `custom:suptronics-ups-card` (full / compact / slim /
-  gauge), served and registered as a Lovelace resource by the integration.
-  Follows the Home Assistant language (English, Czech), `language:` overrides.
+- **Dashboard card** `custom:suptronics-ups-card` (full / compact / gauge),
+  served and registered as a Lovelace resource by the integration: status
+  bar with countdown, battery dial with the charge window, runtime / outage
+  tiles, battery history with a mains strip, charge and shutdown buttons,
+  and optional `extras` mini dials for any other entity (e.g. System
+  Monitor). Follows the Home Assistant language (English, Czech),
+  `language:` overrides. Example view in docs/dashboard-example.yaml.
 - **Instant power-loss detection**: the GPIO edge triggers a refresh at once
   instead of waiting for the next poll.
 - **Diagnostics** download on the device page.

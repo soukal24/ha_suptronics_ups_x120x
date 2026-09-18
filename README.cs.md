@@ -79,22 +79,48 @@ doby je *neznámý*; potřebuje výpadek dlouhý aspoň dvě minuty.
 
 ## Karta do dashboardu
 
-Integrace sama poskytuje animovanou kartu a zaregistruje ji jako zdroj
-dashboardu. Přidejte ji z nabídky karet jako *Suptronics UPS*, nebo v YAML:
+Integrace má vlastní kartu a sama ji zaregistruje jako zdroj dashboardu.
+Přidejte ji z nabídky karet jako *Suptronics UPS*, nebo v YAML:
 
 ```yaml
 type: custom:suptronics-ups-card
-variant: full        # full | compact | slim | gauge
-hours: 24            # historie křivky
+variant: full        # full | compact | gauge
+hours: 24            # rozsah historie
 name: UPS v racku    # volitelný název
 language: cs         # volitelné, jinak podle jazyka Home Assistanta
 ```
 
-Entity si najde sama. Štítky ukazují stav sítě, nabíjení, zdraví baterie,
-odhadovanou výdrž, dobu na baterii během výpadku, okno nabíjení a zda je
-zapnuté automatické vypnutí; stavový štítek ukazuje odpočet, když se blíží
-vypnutí. Každý prvek otevře dialog své entity. Jednotlivé bloky lze
-vynutit volbami `show_flow`, `show_sparkline`, `show_chips`, `show_button`.
+Entity si najde sama. Horní lišta ukazuje stav (a odpočet, když se blíží
+vypnutí), budík ukazuje nabití obarvené podle pásma a okno nabíjení jako
+vnější oblouk, dlaždice ukazují odhadovanou výdrž, dobu na baterii nebo
+poslední výpadek, napětí a počet výpadků. Pod tím je historie baterie s
+proužkem sítě (zelená na síti, červená během výpadku) a tlačítka pro
+nabíjení a automatické vypnutí. Každý prvek otevře dialog své entity.
+
+### Doplňkové budíky
+
+Do stejné karty jde přidat libovolnou další entitu jako malý budík, třeba
+hodnoty ze System Monitoru, se stejnými prahy `severity` jako u vestavěné
+karty gauge (vzestupně pro teplotu, sestupně pro napětí):
+
+```yaml
+type: custom:suptronics-ups-card
+extras:
+  - entity: sensor.processor_temperature
+    name: CPU °C
+    min: 0
+    max: 100
+    severity: { green: 0, yellow: 65, red: 80 }
+  - entity: sensor.memory_use_percent
+    name: RAM
+    severity: { green: 0, yellow: 75, red: 90 }
+```
+
+`unit` a `decimals` jsou volitelné. Bloky lze vynutit nebo skrýt volbami
+`show_stats`, `show_history`, `show_extras` a `show_actions`.
+
+Kompletní ukázkový pohled s odznaky, kartou, klasickými budíky a entitami
+System Monitoru je v [docs/dashboard-example.yaml](docs/dashboard-example.yaml).
 
 Pokud se karta po aktualizaci neobjeví, obnovte stránku prohlížeče pomocí
 Ctrl+F5.

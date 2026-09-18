@@ -83,23 +83,49 @@ measured.
 
 ## The dashboard card
 
-The integration serves an animated card and registers it as a dashboard
+The integration serves its own card and registers it as a dashboard
 resource by itself. Add it in the card picker as *Suptronics UPS*, or in YAML:
 
 ```yaml
 type: custom:suptronics-ups-card
-variant: full        # full | compact | slim | gauge
-hours: 24            # sparkline history
+variant: full        # full | compact | gauge
+hours: 24            # history window
 name: Rack UPS       # optional title
 language: cs         # optional, defaults to the Home Assistant language
 ```
 
-It finds the entities on its own. Chips show mains state, charging, battery
-health, the estimated runtime, the time on battery during an outage, the
-charge window and whether the automatic shutdown is armed; the status pill
-shows the countdown while a shutdown is pending. Every element opens the
-more-info dialog of its entity. Force single blocks with `show_flow`,
-`show_sparkline`, `show_chips`, `show_button`.
+It finds the entities on its own. The top bar shows the status (and the
+countdown while a shutdown is pending), the dial shows the charge coloured
+by band with the charge window as an outer arc, the tiles show the estimated
+runtime, the time on battery or the last outage, the voltage and the outage
+count. Below is the battery history with a mains strip (green on mains, red
+during an outage), then the buttons for charging and automatic shutdown.
+Every element opens the more-info dialog of its entity.
+
+### Extra gauges
+
+Any other entity can be shown as a mini dial in the same card, for instance
+the System Monitor values, with the same `severity` thresholds as the
+built-in gauge card (ascending for a temperature, descending for a voltage):
+
+```yaml
+type: custom:suptronics-ups-card
+extras:
+  - entity: sensor.processor_temperature
+    name: CPU °C
+    min: 0
+    max: 100
+    severity: { green: 0, yellow: 65, red: 80 }
+  - entity: sensor.memory_use_percent
+    name: RAM
+    severity: { green: 0, yellow: 75, red: 90 }
+```
+
+`unit` and `decimals` are optional overrides. Blocks can be forced on or off
+with `show_stats`, `show_history`, `show_extras` and `show_actions`.
+
+A complete example view, with badges, the card, classic gauges and the
+System Monitor entities, is in [docs/dashboard-example.yaml](docs/dashboard-example.yaml).
 
 If the card does not appear after an update, reload the browser page with
 Ctrl+F5.

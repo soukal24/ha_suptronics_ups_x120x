@@ -1,0 +1,183 @@
+# Example view for the Suptronics X120x UPS, version 3.0.
+#
+# Paste it into a dashboard in YAML mode (or copy the parts you want into the
+# UI editor). The UPS entities are the ones the integration creates; the
+# System Monitor entities come from the "System Monitor" integration and may
+# be named differently on your install.
+#
+# Ukázkový pohled pro UPS Suptronics X120x, verze 3.0. Entity System Monitoru
+# se u vás mohou jmenovat jinak.
+
+title: Performance
+icon: mdi:poll
+badges:
+  # Status of the UPS: shows the translated state and changes colour with it.
+  - type: entity
+    entity: sensor.suptronics_x120x_status
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: green
+    visibility:
+      - condition: state
+        entity: sensor.suptronics_x120x_status
+        state: online
+  - type: entity
+    entity: sensor.suptronics_x120x_status
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: blue
+    visibility:
+      - condition: state
+        entity: sensor.suptronics_x120x_status
+        state: charging
+  - type: entity
+    entity: sensor.suptronics_x120x_status
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: amber
+    visibility:
+      - condition: state
+        entity: sensor.suptronics_x120x_status
+        state: on_battery
+  - type: entity
+    entity: sensor.suptronics_x120x_status
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: red
+    visibility:
+      - condition: state
+        entity: sensor.suptronics_x120x_status
+        state:
+          - low_battery
+          - shutting_down
+  - type: entity
+    entity: sensor.ups_battery_level
+    show_name: false
+    show_state: true
+    show_icon: true
+  - type: entity
+    entity: sensor.suptronics_x120x_estimated_runtime
+    show_name: false
+    show_state: true
+    show_icon: true
+  # Battery voltage, coloured by band.
+  - type: entity
+    entity: sensor.ups_battery_voltage
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: red
+    icon: mdi:battery-alert
+    visibility:
+      - condition: numeric_state
+        entity: sensor.ups_battery_voltage
+        below: 3.55
+  - type: entity
+    entity: sensor.ups_battery_voltage
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: accent
+    icon: mdi:battery-charging-50
+    visibility:
+      - condition: numeric_state
+        entity: sensor.ups_battery_voltage
+        above: 3.55
+        below: 3.9
+  - type: entity
+    entity: sensor.ups_battery_voltage
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: green
+    icon: mdi:battery-charging-100
+    visibility:
+      - condition: numeric_state
+        entity: sensor.ups_battery_voltage
+        above: 3.9
+
+cards:
+  # The UPS card with the System Monitor gauges as extra mini dials.
+  - type: custom:suptronics-ups-card
+    variant: full
+    hours: 24
+    extras:
+      - entity: sensor.processor_temperature
+        name: CPU °C
+        min: 0
+        max: 100
+        severity: { green: 0, yellow: 65, red: 80 }
+      - entity: sensor.processor_use
+        name: CPU
+        min: 0
+        max: 100
+        severity: { green: 0, yellow: 75, red: 90 }
+      - entity: sensor.memory_use_percent
+        name: RAM
+        min: 0
+        max: 100
+        severity: { green: 0, yellow: 75, red: 90 }
+      - entity: sensor.disk_use_percent_config
+        name: Disk
+        min: 0
+        max: 100
+        severity: { green: 0, yellow: 70, red: 90 }
+
+  # Classic gauges, kept for those who like them.
+  - type: gauge
+    entity: sensor.ups_battery_voltage
+    name: Napětí baterie
+    unit: V
+    min: 3.4
+    max: 4.4
+    needle: true
+    severity: { green: 3.9, yellow: 3.55, red: 0 }
+  - type: gauge
+    entity: sensor.ups_battery_level
+    name: Stav baterie
+    unit: "%"
+    min: 0
+    max: 100
+    needle: true
+    severity: { green: 50, yellow: 25, red: 0 }
+
+  # Everything about the UPS in one list.
+  - type: entities
+    title: UPS
+    entities:
+      - entity: sensor.suptronics_x120x_status
+      - entity: binary_sensor.suptronics_x120x_ac_power
+      - entity: binary_sensor.suptronics_x120x_charging
+      - entity: sensor.suptronics_x120x_estimated_runtime
+      - entity: sensor.suptronics_x120x_time_on_battery
+      - entity: sensor.suptronics_x120x_last_power_loss
+      - entity: sensor.suptronics_x120x_power_outages
+      - type: divider
+      - entity: switch.ups_charging_on_off
+      - entity: number.suptronics_x120x_charge_below
+      - entity: number.suptronics_x120x_charge_up_to
+      - type: divider
+      - entity: switch.suptronics_x120x_shutdown_on_low_battery
+      - entity: number.suptronics_x120x_shut_down_below
+      - entity: number.suptronics_x120x_shut_down_after_minutes_on_battery
+
+  - type: history-graph
+    title: Napájení ze sítě
+    hours_to_show: 24
+    entities:
+      - entity: binary_sensor.suptronics_x120x_ac_power
+      - entity: sensor.ups_battery_level
+
+  - type: entities
+    title: Raspberry Pi
+    entities:
+      - entity: sensor.disk_free
+      - entity: sensor.disk_use
+      - entity: sensor.memory_free
+      - entity: sensor.memory_use
+      - entity: binary_sensor.rpi_power_status
+      - entity: sensor.last_boot
