@@ -87,6 +87,7 @@ const STRINGS = {
     now: "now",
     hours_ago: "-{hours} h",
     window: "Window {min}-{max} %",
+    limit: "Charge up to {max} %",
     charging_enabled: "Charging on",
     charging_paused: "Charging paused",
     shutdown_on: "Auto shutdown on",
@@ -117,6 +118,7 @@ const STRINGS = {
     now: "teď",
     hours_ago: "-{hours} h",
     window: "Okno {min}–{max} %",
+    limit: "Nabíjet do {max} %",
     charging_enabled: "Nabíjení zapnuto",
     charging_paused: "Nabíjení pozastaveno",
     shutdown_on: "Auto vypnutí zapnuto",
@@ -685,7 +687,10 @@ class SuptronicsUpsCard extends HTMLElement {
     const attrs = (this._state("charge_switch") || {}).attributes || {};
     const min = Number(attrs.charge_limit_min);
     const max = Number(attrs.charge_limit_max);
-    const limited = Number.isFinite(min) && Number.isFinite(max) && max < 100 && max > min;
+    // Charging is limited whenever the upper limit is below 100 %. The lower
+    // limit is never above the upper one (the integration clamps it), so a
+    // window of zero width simply means "charge up to max".
+    const limited = Number.isFinite(min) && Number.isFinite(max) && max < 100;
     const arc = this._el.dialWindow;
     const outerLength = (2 * Math.PI * (ARC_RADIUS + 12) * ARC_SWEEP) / 360;
     if (!limited) {
@@ -693,15 +698,16 @@ class SuptronicsUpsCard extends HTMLElement {
       this._el.windowText.hidden = true;
       return;
     }
-    const length = (outerLength * (max - min)) / 100;
+    const low = Math.min(min, max);
+    const length = Math.max((outerLength * (max - low)) / 100, 2);
     arc.setAttribute("stroke-dasharray", `${length} ${outerLength}`);
-    arc.setAttribute("stroke-dashoffset", -(outerLength * min) / 100);
+    arc.setAttribute("stroke-dashoffset", -(outerLength * low) / 100);
     arc.style.opacity = "1";
     this._el.windowText.hidden = false;
-    this._el.windowText.textContent = this._t("window", {
-      min: Math.round(min),
-      max: Math.round(max),
-    });
+    this._el.windowText.textContent =
+      max - low < 1
+        ? this._t("limit", { max: Math.round(max) })
+        : this._t("window", { min: Math.round(low), max: Math.round(max) });
   }
 
   _updateExtras() {

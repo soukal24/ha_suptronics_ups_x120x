@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -135,7 +136,13 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     card_url = f"{URL_BASE}/{CARD_FILENAME}"
     frontend_dir = Path(__file__).parent / "frontend"
 
-    if not await hass.async_add_executor_job((frontend_dir / CARD_FILENAME).is_file):
+    # The URL carries the version *and* a fingerprint of the file itself, so
+    # any change to the card (an update, or a file copied in by hand) gives a
+    # new URL and no browser keeps serving a cached copy of the old one.
+    fingerprint = await hass.async_add_executor_job(
+        _card_fingerprint, frontend_dir / CARD_FILENAME
+    )
+    if fingerprint is None:
         _LOGGER.error(
             "Dashboard card not found at %s; the integration works, but the card "
             "will not appear. Reinstall the integration folder including frontend/",
@@ -156,13 +163,21 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
             card_url,
         )
 
-    versioned_url = f"{card_url}?v={VERSION}"
+    versioned_url = f"{card_url}?v={VERSION}-{fingerprint}"
     if await _async_ensure_lovelace_resource(hass, card_url, versioned_url):
         _LOGGER.info("UPS dashboard card registered as a Lovelace resource: %s", versioned_url)
     else:
         add_extra_js_url(hass, versioned_url)
         _LOGGER.info("Dashboards are in YAML mode; UPS card injected: %s", versioned_url)
     domain_data[DATA_FRONTEND_REGISTERED] = True
+
+
+def _card_fingerprint(path: Path) -> str | None:
+    """Short hash of the card file, or None when it is missing. Blocking."""
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+    except OSError:
+        return None
 
 
 def _lovelace_resources(hass: HomeAssistant) -> Any | None:
