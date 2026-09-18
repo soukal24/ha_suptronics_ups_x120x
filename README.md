@@ -104,8 +104,16 @@ Every element opens the more-info dialog of its entity.
 
 ### Extra gauges
 
-Any other entity can be shown as a mini dial in the same card, for instance
-the System Monitor values, with the same `severity` thresholds as the
+The values of the *System Monitor* integration (CPU temperature, CPU, memory
+and disk use) can be added as mini dials with one line; the card finds the
+entities on its own:
+
+```yaml
+type: custom:suptronics-ups-card
+extras: system_monitor
+```
+
+Any other entity works too, with the same `severity` thresholds as the
 built-in gauge card (ascending for a temperature, descending for a voltage):
 
 ```yaml

@@ -12,7 +12,8 @@
  *   language: en | cs                     (default: the Home Assistant language)
  *   show_stats / show_history / show_extras / show_actions:
  *       force a single block on or off, whatever the variant decided
- *   extras:                               optional mini gauges for any entity
+ *   extras: system_monitor                finds the System Monitor entities
+ *       (CPU temperature, CPU, memory, disk) on its own; or a list:
  *     - entity: sensor.processor_temperature
  *       name: CPU
  *       min: 0
@@ -205,11 +206,17 @@ class SuptronicsUpsCard extends HTMLElement {
         `${CARD_TYPE}: unknown variant "${variant}". Use one of: ${Object.keys(VARIANTS).join(", ")}`
       );
     }
-    const extras = Array.isArray(config.extras) ? config.extras : [];
-    for (const extra of extras) {
-      if (!extra || typeof extra.entity !== "string") {
-        throw new Error(`${CARD_TYPE}: every item of "extras" needs an "entity"`);
+    let extras = config.extras;
+    if (extras === true || extras === "system_monitor") {
+      extras = "system_monitor";
+    } else if (Array.isArray(extras)) {
+      for (const extra of extras) {
+        if (!extra || typeof extra.entity !== "string") {
+          throw new Error(`${CARD_TYPE}: every item of "extras" needs an "entity"`);
+        }
       }
+    } else {
+      extras = [];
     }
     this._config = { ...config, variant, extras };
     this._entities = null;
@@ -220,6 +227,41 @@ class SuptronicsUpsCard extends HTMLElement {
   getCardSize() {
     const parts = this._parts();
     return 3 + (parts.history ? 2 : 0) + (parts.extras && this._config.extras.length ? 2 : 0);
+  }
+
+  /**
+   * The System Monitor integration's usual readings, found by their
+   * translation key (which does not change with the language), with the
+   * thresholds of the classic gauge cards. Used by `extras: system_monitor`.
+   */
+  _systemMonitorExtras() {
+    const registry = this._hass.entities || {};
+    const wanted = [
+      { key: "processor_temperature", name: "CPU °C", severity: { green: 0, yellow: 65, red: 80 } },
+      { key: "processor_use", name: "CPU", severity: { green: 0, yellow: 75, red: 90 } },
+      { key: "memory_use_percent", name: "RAM", severity: { green: 0, yellow: 75, red: 90 } },
+      { key: "disk_use_percent", name: "Disk", severity: { green: 0, yellow: 70, red: 90 } },
+    ];
+    const extras = [];
+    for (const item of wanted) {
+      const match = Object.values(registry).find(
+        (entry) =>
+          entry.platform === "systemmonitor" &&
+          (entry.translation_key === item.key ||
+            (entry.entity_id || "").includes(item.key)) &&
+          this._hass.states[entry.entity_id]
+      );
+      if (match) {
+        extras.push({ entity: match.entity_id, name: item.name, min: 0, max: 100, severity: item.severity });
+      }
+    }
+    return extras;
+  }
+
+  _extrasList() {
+    return this._config.extras === "system_monitor"
+      ? this._systemMonitorExtras()
+      : this._config.extras;
   }
 
   _parts() {
@@ -522,7 +564,7 @@ class SuptronicsUpsCard extends HTMLElement {
   _buildExtras() {
     const container = this._el.extras;
     container.innerHTML = "";
-    const extras = this._config.extras;
+    const extras = this._extrasList();
     if (!this._shown.extras || extras.length === 0) {
       container.hidden = true;
       return;

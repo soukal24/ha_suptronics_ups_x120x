@@ -99,9 +99,16 @@ nabíjení a automatické vypnutí. Každý prvek otevře dialog své entity.
 
 ### Doplňkové budíky
 
-Do stejné karty jde přidat libovolnou další entitu jako malý budík, třeba
-hodnoty ze System Monitoru, se stejnými prahy `severity` jako u vestavěné
-karty gauge (vzestupně pro teplotu, sestupně pro napětí):
+Hodnoty integrace *System Monitor* (teplota CPU, CPU, paměť a disk) přidáte
+jako malé budíky jedním řádkem, entity si karta najde sama:
+
+```yaml
+type: custom:suptronics-ups-card
+extras: system_monitor
+```
+
+Jde přidat i libovolná jiná entita, se stejnými prahy `severity` jako u
+vestavěné karty gauge (vzestupně pro teplotu, sestupně pro napětí):
 
 ```yaml
 type: custom:suptronics-ups-card

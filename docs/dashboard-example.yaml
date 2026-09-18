@@ -101,31 +101,13 @@ badges:
         above: 3.9
 
 cards:
-  # The UPS card with the System Monitor gauges as extra mini dials.
+  # The UPS card with the System Monitor gauges as extra mini dials. The
+  # card finds the System Monitor entities itself; to pick your own entities
+  # or thresholds, replace `system_monitor` with a list (see the README).
   - type: custom:suptronics-ups-card
     variant: full
     hours: 24
-    extras:
-      - entity: sensor.processor_temperature
-        name: CPU °C
-        min: 0
-        max: 100
-        severity: { green: 0, yellow: 65, red: 80 }
-      - entity: sensor.processor_use
-        name: CPU
-        min: 0
-        max: 100
-        severity: { green: 0, yellow: 75, red: 90 }
-      - entity: sensor.memory_use_percent
-        name: RAM
-        min: 0
-        max: 100
-        severity: { green: 0, yellow: 75, red: 90 }
-      - entity: sensor.disk_use_percent_config
-        name: Disk
-        min: 0
-        max: 100
-        severity: { green: 0, yellow: 70, red: 90 }
+    extras: system_monitor
 
   # Classic gauges, kept for those who like them.
   - type: gauge
