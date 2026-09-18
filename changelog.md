@@ -38,6 +38,7 @@ keys, so an update carries history, automations and settings over.
 - **Instant power-loss detection**: the GPIO edge triggers a refresh at once
   instead of waiting for the next poll.
 - **Diagnostics** download on the device page.
+- **Brand icon** in `brand/`, shown by Home Assistant 2026.3 and later.
 - Options: polling interval and low battery threshold.
 - Czech translation of everything, including the shutdown notifications.
 - Tests (`tests/`, pytest-homeassistant-custom-component).

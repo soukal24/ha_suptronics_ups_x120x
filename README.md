@@ -208,6 +208,13 @@ logger:
 Both GPIO lines are held for the whole life of the integration. Releasing
 the charge line returns the board to its default, which is charging.
 
+## Brand icon
+
+The integration carries its own icon in `custom_components/suptronics_ups_x120x/brand/`
+(`icon.png` 256 px, `icon@2x.png` 512 px). Home Assistant 2026.3 and later
+shows it in the integrations list; older versions ignore the folder. To
+regenerate it: `python tools/make_brand_icon.py` (needs Pillow).
+
 ## Credits and licence
 
 MIT, see [LICENSE](LICENSE). Version 3.0 was reworked with the

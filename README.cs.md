@@ -202,6 +202,13 @@ logger:
 Obě GPIO linky integrace drží po celou dobu běhu. Uvolnění linky nabíjení
 vrátí desku do výchozího stavu, tedy nabíjení.
 
+## Ikona integrace
+
+Integrace nese vlastní ikonu ve složce `custom_components/suptronics_ups_x120x/brand/`
+(`icon.png` 256 px, `icon@2x.png` 512 px). Home Assistant 2026.3 a novější ji
+ukazuje v seznamu integrací, starší verze složku ignorují. Znovu vygenerovat:
+`python tools/make_brand_icon.py` (vyžaduje Pillow).
+
 ## Poděkování a licence
 
 MIT, viz [LICENSE](LICENSE). Verze 3.0 vznikla s využitím
