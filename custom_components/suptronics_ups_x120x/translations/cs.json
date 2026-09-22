@@ -61,11 +61,11 @@
       "battery_state": {
         "name": "Úroveň baterie",
         "state": {
-          "full": "Plně nabitá",
-          "high": "Dobře nabitá",
-          "medium": "Napůl nabitá",
-          "low": "Skoro vybitá",
-          "critical": "Kritická"
+          "full": "Plně nabito",
+          "high": "Dostatečně nabito",
+          "medium": "Napůl nabito",
+          "low": "Téměř vybito",
+          "critical": "Kriticky vybito"
         }
       },
       "runtime_estimate": {

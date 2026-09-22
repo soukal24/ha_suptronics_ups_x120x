@@ -125,6 +125,10 @@ class UpsCoordinator(DataUpdateCoordinator[UpsState]):
         self._started_at = time.monotonic()
         self._on_battery_since: float | None = None
         self._on_battery_start_capacity: float | None = None
+        # An outage that was running when the previous run ended (a restart or
+        # a reload during a power cut). The first sample continues it instead
+        # of counting it again.
+        self._resume_outage_from: datetime | None = None
         self._shutdown_armed_at: float | None = None
         self._shutdown_reason: str | None = None
         self._shutdown_requested = False
@@ -182,6 +186,8 @@ class UpsCoordinator(DataUpdateCoordinator[UpsState]):
         self.outage_count = int(stored.get("outage_count", 0))
         self.last_power_loss = _parse_datetime(stored.get("last_power_loss"))
         self.last_power_restored = _parse_datetime(stored.get("last_power_restored"))
+        if stored.get("outage_active") and self.last_power_loss is not None:
+            self._resume_outage_from = self.last_power_loss
 
     def _settings_to_save(self) -> dict[str, Any]:
         return {
@@ -195,6 +201,7 @@ class UpsCoordinator(DataUpdateCoordinator[UpsState]):
             "outage_count": self.outage_count,
             "last_power_loss": _format_datetime(self.last_power_loss),
             "last_power_restored": _format_datetime(self.last_power_restored),
+            "outage_active": self._on_battery_since is not None,
         }
 
     @callback
@@ -425,7 +432,21 @@ class UpsCoordinator(DataUpdateCoordinator[UpsState]):
     def _track_outage(self, sample: UpsSample) -> None:
         """Notice power going and coming back; learn the discharge rate."""
         now = time.monotonic()
+        resume_from = self._resume_outage_from
+        self._resume_outage_from = None
         if not sample.ac_present and self._on_battery_since is None:
+            if resume_from is not None:
+                # Still the same power cut as before the restart: keep its
+                # start time and do not count it twice. The discharge rate is
+                # measured afresh from here.
+                elapsed = max(0.0, (dt_util.utcnow() - resume_from).total_seconds())
+                self._on_battery_since = now - elapsed
+                self._on_battery_start_capacity = sample.capacity
+                _LOGGER.info(
+                    "Still on battery after restart, outage running for %d minutes",
+                    elapsed // 60,
+                )
+                return
             self._on_battery_since = now
             self._on_battery_start_capacity = sample.capacity
             self.outage_count += 1

@@ -55,6 +55,8 @@ keys, so an update carries history, automations and settings over.
   ignore commands.
 - Settings (charge switch, limits, shutdown rules, learned discharge rate,
   outage counters) are persisted in `.storage`, not restored per entity.
+- A running outage is remembered across a restart or reload, so it is
+  neither counted twice nor does the time on battery start from zero.
 - The legacy `binary_sensor.ups_power` keeps its options (device class,
   invert logic) and its meaning; the new `AC power` sensor is the plain one.
 - Battery level and voltage are read by the coordinator instead of per

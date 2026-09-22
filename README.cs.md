@@ -23,7 +23,7 @@ kopírovat mezi systémy.
 | Výpadek napájení | `binary_sensor.ups_power` | senzor z verze 2: zapnutý při výpadku sítě (lze změnit) |
 | Nabíjení baterie | `switch.ups_charging_on_off` | hlavní vypínač nabíjení (z verze 2) |
 | Stav | `sensor.ups_status` | Na síti, Nabíjí se, Na baterii, Slabá baterie, Vypíná se |
-| Úroveň baterie | `sensor.ups_battery_state` | Plně nabitá / Dobře nabitá / Napůl nabitá / Skoro vybitá / Kritická |
+| Úroveň baterie | `sensor.ups_battery_state` | Plně nabito / Dostatečně nabito / Napůl nabito / Téměř vybito / Kriticky vybito |
 | Síťové napájení | `binary_sensor.ups_ac_power` | síť je připojená |
 | Nabíjení | `binary_sensor.ups_battery_charging` | baterie se právě nabíjí |
 | Slabá baterie | `binary_sensor.ups_battery_low` | pod nastaveným prahem |

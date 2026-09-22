@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -163,6 +164,30 @@ async def test_settings_survive_reload(hass: HomeAssistant, fake_hardware) -> No
     assert restored.shutdown_below == 15
     assert restored.shutdown_after_minutes == 30
     assert fake_hardware.charging_allowed is False
+
+
+async def test_reload_during_outage_does_not_count_twice(hass: HomeAssistant, fake_hardware) -> None:
+    """A restart in the middle of a power cut continues the same outage."""
+    entry = await _setup(hass)
+    fake_hardware.ac_present = False
+    await _poll(hass, entry)
+    assert entry.runtime_data.outage_count == 1
+    # Pretend the outage started ten minutes ago, then reload.
+    entry.runtime_data.last_power_loss -= timedelta(seconds=600)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    restored = entry.runtime_data
+    assert restored.outage_count == 1
+    assert restored.time_on_battery is not None and restored.time_on_battery >= 600
+    assert hass.states.get("sensor.ups_power_outages").state == "1"
+
+    # Power back, then gone again: that is a new outage.
+    fake_hardware.ac_present = True
+    await _poll(hass, entry)
+    fake_hardware.ac_present = False
+    await _poll(hass, entry)
+    assert restored.outage_count == 2
 
 
 async def test_power_loss_status_and_outage_count(hass: HomeAssistant, fake_hardware) -> None:
