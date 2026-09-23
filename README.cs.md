@@ -8,6 +8,8 @@ sama vypne Pi při výpadku, odhaduje zbývající výdrž, na výpadek reaguje
 okamžitě a přináší animovanou kartu do dashboardu. Všechny entity z verze 2
 si zachovaly svá ID, takže stávající automatizace a historie fungují dál.
 
+![Karta UPS](docs/card.png)
+
 ## Co integrace vytvoří
 
 Jedno **zařízení** *Suptronics X120x* s těmito entitami:
@@ -39,6 +41,8 @@ kopírovat mezi systémy.
 | Vypnout po minutách na baterii | `number.ups_shutdown_after_minutes` | časové pravidlo pro vypnutí, 0 = vypnuto |
 | Odpočet do vypnutí | `sensor.ups_shutdown_countdown` | sekundy do vypnutí, když se blíží |
 
+![Stránka zařízení](docs/device.png)
+
 ### Okno nabíjení
 
 *Nabíjet do* a *Nabíjet pod* tvoří rozsah s hysterezí, který hlídá sama
@@ -66,6 +70,8 @@ Supervised se používá `hassio.host_shutdown`. Na jiných typech instalace
 integrace místo toho vyvolá událost `suptronics_ups_x120x_shutdown` s poli
 `reason`, `capacity`, `voltage` a `time_on_battery`, na kterou může reagovat
 automatizace.
+
+![Na baterii a odpočet před vypnutím](docs/states.png)
 
 Aby se Pi po obnovení sítě samo **znovu zapnulo**, musí se Pi 5 při vypnutí
 opravdu odpojit od napájení. Nastavuje se jednou v EEPROM z Raspberry Pi OS:
@@ -102,6 +108,8 @@ vnější oblouk, dlaždice ukazují odhadovanou výdrž, dobu na baterii nebo
 poslední výpadek, napětí a počet výpadků. Pod tím je historie baterie s
 proužkem sítě (zelená na síti, červená během výpadku) a tlačítka pro
 nabíjení a automatické vypnutí. Každý prvek otevře dialog své entity.
+
+![Varianty full, compact a gauge](docs/variants.png)
 
 ### Doplňkové budíky
 
@@ -164,6 +172,8 @@ Integrace před vytvořením ověří, že měřič baterie odpovídá.
 
 **Možnosti** (tlačítko Konfigurovat u integrace): interval čtení, práh slabé
 baterie a třída a polarita staršího senzoru *Výpadek napájení*.
+
+![Dialog možností](docs/options.png)
 
 ## Přechod z verze 2.x
 

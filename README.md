@@ -11,6 +11,8 @@ power loss the moment it happens, and ships an animated dashboard card. Every
 entity from version 2 keeps its id, so existing automations and history carry
 over.
 
+![The UPS card](docs/card.png)
+
 ## What it creates
 
 One **device**, *Suptronics X120x*, with these entities:
@@ -42,6 +44,8 @@ be copied between systems.
 | Shut down after minutes on battery | `number.ups_shutdown_after_minutes` | time rule for the shutdown, 0 = off |
 | Shutdown countdown | `sensor.ups_shutdown_countdown` | seconds until the shutdown, while one is pending |
 
+![The device page](docs/device.png)
+
 ### The charge window
 
 *Charge up to* and *Charge below* define a range with hysteresis, enforced by
@@ -69,6 +73,8 @@ to stop it. On Home Assistant OS and Supervised the shutdown uses
 `hassio.host_shutdown`. On other install types the integration fires the
 `suptronics_ups_x120x_shutdown` event instead, with `reason`, `capacity`,
 `voltage` and `time_on_battery`, so an automation can do it.
+
+![On battery, and the countdown before the shutdown](docs/states.png)
 
 For the Pi to power **back on** when mains returns, the Pi 5 must really power
 off on halt. Set once in the EEPROM from Raspberry Pi OS:
@@ -107,6 +113,8 @@ runtime, the time on battery or the last outage, the voltage and the outage
 count. Below is the battery history with a mains strip (green on mains, red
 during an outage), then the buttons for charging and automatic shutdown.
 Every element opens the more-info dialog of its entity.
+
+![The full, compact and gauge variants](docs/variants.png)
 
 ### Extra gauges
 
@@ -170,6 +178,8 @@ integration checks that the fuel gauge answers before creating the entry.
 
 **Options** (Configure on the integration): polling interval, low battery
 threshold, and the class and polarity of the legacy *Power loss* sensor.
+
+![The options dialog](docs/options.png)
 
 ## Upgrading from 2.x
 
