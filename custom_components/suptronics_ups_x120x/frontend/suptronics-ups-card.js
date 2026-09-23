@@ -292,7 +292,9 @@ class SuptronicsUpsCard extends HTMLElement {
     this._hass = hass;
     if (!this._built) this._build();
     this._update();
-    if (!this._shown || !this._shown.history) return;
+    // The history feeds the outage tile as well as the strip, so it is
+    // fetched whenever either is on screen.
+    if (!this._shown || !(this._shown.history || this._shown.stats)) return;
     // Refresh the history on its timer, and at once when the mains state
     // flips, so the strip and the outage count do not lag by minutes.
     const acOn = this._isOn("ac");
@@ -887,7 +889,7 @@ const TEMPLATE = `
 
 <div class="main">
   <div class="dial" data-role="capacity">
-    <svg viewBox="0 0 200 180" aria-hidden="true">
+    <svg viewBox="0 0 200 158" aria-hidden="true">
       <path class="dial-window" data-ref="dialWindow"/>
       <path class="dial-track" data-ref="dialTrack"/>
       <path class="dial-value" data-ref="dialValue"/>
@@ -1055,7 +1057,7 @@ ha-card.ups {
 }
 .dial-readout {
   position: absolute;
-  left: 0; right: 0; top: 46%;
+  left: 0; right: 0; top: 55%;
   transform: translateY(-50%);
   text-align: center;
   pointer-events: none;

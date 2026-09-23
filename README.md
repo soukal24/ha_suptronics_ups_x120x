@@ -26,7 +26,7 @@ be copied between systems.
 | Power loss | `binary_sensor.ups_power` | the 2.x sensor: on while mains power is lost (configurable) |
 | Battery charging | `switch.ups_charging_on_off` | master switch for charging (kept from 2.x) |
 | Status | `sensor.ups_status` | `online`, `charging`, `on_battery`, `low_battery`, `shutting_down` |
-| Battery level | `sensor.ups_battery_state` | full / high / medium / low / critical |
+| Battery level | `sensor.ups_battery_state` | Fully charged / Well charged / Half charged / Nearly empty / Critical (`full` / `high` / `medium` / `low` / `critical`) |
 | AC power | `binary_sensor.ups_ac_power` | mains present |
 | Charging | `binary_sensor.ups_battery_charging` | the pack is actually being charged |
 | Battery low | `binary_sensor.ups_battery_low` | below the configurable threshold |

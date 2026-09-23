@@ -61,10 +61,10 @@
       "battery_state": {
         "name": "Battery level",
         "state": {
-          "full": "Full",
-          "high": "High",
-          "medium": "Medium",
-          "low": "Low",
+          "full": "Fully charged",
+          "high": "Well charged",
+          "medium": "Half charged",
+          "low": "Nearly empty",
           "critical": "Critical"
         }
       },
