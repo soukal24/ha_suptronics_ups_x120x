@@ -1033,9 +1033,6 @@ ha-card.ups {
   align-items: stretch;
   padding-top: 8px;
 }
-@container (max-width: 440px) {
-  .main { grid-template-columns: 1fr; }
-}
 
 .dial { position: relative; width: 220px; max-width: 100%; margin: 0 auto; cursor: pointer; align-self: center; }
 .dial > svg { width: 100%; display: block; overflow: visible; }
@@ -1193,6 +1190,15 @@ ha-card.ups {
 [data-variant="compact"] .stat-value { font-size: 1.2rem; }
 [data-variant="gauge"] .main { grid-template-columns: 1fr; }
 [data-variant="gauge"] .dial { width: 240px; }
+
+/* Narrow card (a column of a stack, a phone): the dial goes above the tiles.
+   After the variant rules on purpose, so it wins for every variant. */
+@container (max-width: 440px) {
+  .main, [data-variant="compact"] .main { grid-template-columns: 1fr; gap: 10px; }
+  .dial, [data-variant="compact"] .dial { width: 190px; }
+  .stats { grid-auto-rows: auto; }
+  .banner .window-text { flex-basis: 100%; text-align: center; }
+}
 
 .empty { padding: 14px 4px; color: var(--u-muted); }
 .empty-title { font-size: 1.05rem; font-weight: 600; color: var(--u-ink); margin-bottom: 6px; }
