@@ -37,6 +37,10 @@ keys, so an update carries history, automations and settings over.
   `language:` overrides. Example view in docs/dashboard-example.yaml.
 - **Instant power-loss detection**: the GPIO edge triggers a refresh at once
   instead of waiting for the next poll.
+- **No lag in the UI**: switches write their state immediately, refreshes
+  asked for by a GPIO edge or a user action run at once (one-second
+  coalescing instead of ten), the card reloads its history the moment the
+  mains state flips and counts the shutdown down every second.
 - **Diagnostics** download on the device page.
 - **Brand icon** in `brand/`, shown by Home Assistant 2026.3 and later.
 - Options: polling interval and low battery threshold.

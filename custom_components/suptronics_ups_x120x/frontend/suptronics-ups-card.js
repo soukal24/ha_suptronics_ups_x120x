@@ -292,8 +292,40 @@ class SuptronicsUpsCard extends HTMLElement {
     this._hass = hass;
     if (!this._built) this._build();
     this._update();
-    if (this._shown && this._shown.history && Date.now() - this._historyAt > HISTORY_REFRESH_MS) {
+    if (!this._shown || !this._shown.history) return;
+    // Refresh the history on its timer, and at once when the mains state
+    // flips, so the strip and the outage count do not lag by minutes.
+    const acOn = this._isOn("ac");
+    const flipped = this._lastAc !== undefined && this._lastAc !== acOn;
+    this._lastAc = acOn;
+    if (flipped || Date.now() - this._historyAt > HISTORY_REFRESH_MS) {
       this._fetchHistory();
+    }
+  }
+
+  disconnectedCallback() {
+    this._stopTicker();
+  }
+
+  /**
+   * The countdown sensor only updates with each poll; between polls the
+   * card counts the seconds down itself, so the number moves every second.
+   */
+  _startTicker(seconds) {
+    this._stopTicker();
+    this._tick = seconds;
+    this._ticker = setInterval(() => {
+      this._tick = Math.max(0, this._tick - 1);
+      if (this._el && this._el.status) {
+        this._el.status.textContent = this._t("countdown", { seconds: this._tick });
+      }
+    }, 1000);
+  }
+
+  _stopTicker() {
+    if (this._ticker) {
+      clearInterval(this._ticker);
+      this._ticker = null;
     }
   }
 
@@ -636,7 +668,9 @@ class SuptronicsUpsCard extends HTMLElement {
     this._el.title.textContent = this._config.name || this._deviceName() || "Suptronics UPS";
     if (statusKey === "shutting_down" && countdown !== null) {
       this._el.status.textContent = this._t("countdown", { seconds: Math.round(countdown) });
+      this._startTicker(Math.round(countdown));
     } else {
+      this._stopTicker();
       this._el.status.textContent = statusState
         ? this._displayState(statusState)
         : this._t(`status_${statusKey}`);

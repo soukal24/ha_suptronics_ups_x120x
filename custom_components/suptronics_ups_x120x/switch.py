@@ -83,10 +83,12 @@ class UpsChargingSwitch(UpsEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Allow the pack to charge."""
         await self.coordinator.async_set_charging_switch(True)
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop charging the pack."""
         await self.coordinator.async_set_charging_switch(False)
+        self.async_write_ha_state()
 
 
 class UpsShutdownSwitch(UpsEntity, SwitchEntity):
@@ -120,7 +122,9 @@ class UpsShutdownSwitch(UpsEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Arm the automatic shutdown."""
         await self.coordinator.async_set_shutdown(enabled=True)
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disarm it, cancelling any countdown in progress."""
         await self.coordinator.async_set_shutdown(enabled=False)
+        self.async_write_ha_state()

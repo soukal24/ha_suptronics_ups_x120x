@@ -21,6 +21,7 @@ from typing import Any
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -99,6 +100,12 @@ class UpsCoordinator(DataUpdateCoordinator[UpsState]):
             name=DOMAIN,
             update_interval=timedelta(
                 seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            ),
+            # A refresh asked for by a GPIO edge or a user action runs at once;
+            # only a burst within one second is coalesced. The default cooldown
+            # of ten seconds made the second of two quick changes wait.
+            request_refresh_debouncer=Debouncer(
+                hass, _LOGGER, cooldown=1, immediate=True
             ),
         )
         self.hardware = UpsHardware()
