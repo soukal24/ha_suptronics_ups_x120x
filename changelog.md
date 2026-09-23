@@ -5,7 +5,7 @@ Use it as both the changelog and the release notes for GitHub.
 
 ---
 
-## [3.0.0] - unreleased
+## [3.0.0] - 2026-09-23
 
 A complete rework. Every entity from 2.x keeps its `unique_id` and its
 `entity_id`, the device keeps its identifier and the two options keep their
